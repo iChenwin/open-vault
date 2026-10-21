@@ -91,6 +91,17 @@ func (f *fakeTracker) Current(context.Context, string) (cbt.Transition, error) {
 	}
 	return f.current, nil
 }
+func (f *fakeTracker) SourceSize(context.Context, string) (int64, error) {
+	return f.size, nil
+}
+
+func TestOversizedBaselineRefusedBeforeAllocatingCOW(t *testing.T) {
+	c, store, tracker, _ := coordinatorFixture(t)
+	tracker.size = blockstore.MaxVolumeSize + 4096
+	if _, err := backup(context.Background(), c, store, tracker, ""); err == nil || tracker.setups != 0 {
+		t.Fatal("oversized baseline allocated tracking state", err, tracker.setups)
+	}
+}
 func (f *fakeTracker) Setup(context.Context, string, string) (cbt.Generation, error) {
 	f.setups++
 	f.current = cbt.Transition{Current: cbt.Generation{VolumeID: "data", UUID: series, Sequence: 1, Mode: "snapshot", SnapshotDevice: f.source, Size: f.size}}

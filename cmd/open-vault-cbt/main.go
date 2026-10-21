@@ -28,6 +28,7 @@ type config struct {
 	DBDCtl     string     `json:"dbdctl"`
 }
 type tracker interface {
+	SourceSize(context.Context, string) (int64, error)
 	Current(context.Context, string) (cbt.Transition, error)
 	Setup(context.Context, string, string) (cbt.Generation, error)
 	ToSnapshot(context.Context, string, string) (cbt.Transition, error)
@@ -206,6 +207,13 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 		}
 		if parent != "" {
 			return result, errors.New("tracking state missing for existing backup chain; create a new repository and baseline after operator review")
+		}
+		size, e := t.SourceSize(ctx, c.Volume.ID)
+		if e != nil {
+			return result, e
+		}
+		if e = s.CheckAppend("", size); e != nil {
+			return result, e
 		}
 		g, e := t.Setup(ctx, c.Volume.ID, randomName())
 		if e != nil {

@@ -639,6 +639,24 @@ func (d *Driver) newCOW(v Volume, name string) (string, error) {
 	return path, nil
 }
 
+// SourceSize checks the approved source before any COW allocation or tracking
+// command. Coordinators use it to reject unsupported repository capacities.
+func (d *Driver) SourceSize(ctx context.Context, id string) (int64, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	v, err := d.volume(id)
+	if err != nil {
+		return 0, err
+	}
+	if err = d.validate(v); err != nil {
+		return 0, err
+	}
+	return d.size(v.Device)
+}
+
 func (d *Driver) Setup(ctx context.Context, id, cowName string) (Generation, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
