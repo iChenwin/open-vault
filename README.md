@@ -16,6 +16,18 @@
 
 ## 构建与部署
 
+### 新手先打开控制台
+
+下载 [Linux amd64 启动包](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.3)，解压后运行：
+
+```sh
+bash start.sh
+```
+
+不需要 Go 或 Nginx。程序自动准备配置和登录口令，并显示局域网访问地址。在同一局域网的电脑或手机打开 `http://服务器IP:8080`，输入启动窗口里的口令即可。页面打开不代表备份已配置或通过恢复验收；完整步骤和排查见 [新手入门](docs/QUICKSTART.md)。
+
+### 从源码构建
+
 需要 Go 1.23+。目标机器使用 **amd64** 工具链；已有合适的 Go 安装时直接构建：
 
 ```sh
@@ -28,10 +40,10 @@ go build -o open-vault-cbt-agent ./cmd/open-vault-cbt-agent
 1. 先在可销毁的 QEMU 虚拟机运行 [真实内核实验](docs/CBT-LAB.md)，检查该提交的实验结果。
 2. 按 [驱动说明](docs/CBT-DRIVER.md) 准备固定外部驱动构建。项目不会在业务主机自动安装或加载驱动。
 3. 配置 [CBT CLI](config.cbt.example.json) 和 [特权 Agent](config.cbt-agent.example.json)，参考 [Agent 部署](docs/CBT-AGENT.md)。
-4. 按 [部署指南](docs/DEPLOYMENT.md) 配置非 root Web 控制台，其配置只包含监听地址、API 令牌文件和 Agent socket。
+4. 按 [部署指南](docs/DEPLOYMENT.md) 配置非 root Web 控制台，其配置包含监听地址、可选局域网开关、API 令牌文件和 Agent socket。
 5. 登录后执行备份、校验并恢复到新镜像，核对实际恢复内容。
 
-本机访问 `http://127.0.0.1:8080`。局域网可使用反向代理提供 `http://服务器IP:8080`，示例见部署指南。
+构建后可运行 `bash start.sh`，默认允许局域网直连；或运行 `./open-vault -quickstart` 仅本机体验。固定配置部署和可选反向代理见部署指南。
 
 ## 能力边界
 

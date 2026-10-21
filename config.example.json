@@ -1,5 +1,6 @@
 {
   "listen": "127.0.0.1:8080",
+  "allow_lan": false,
   "token_file": "/etc/open-vault/api-token",
   "cbt_socket": "/run/open-vault-cbt/agent.sock"
 }

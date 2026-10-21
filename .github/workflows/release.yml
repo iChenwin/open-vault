@@ -5,7 +5,7 @@ on:
       tag:
         description: Existing release tag to build
         required: true
-        default: v0.1.0-alpha.1
+        default: v0.2.0-alpha.3
 permissions:
   contents: write
 jobs:
@@ -26,8 +26,17 @@ jobs:
             CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o release/open-vault-cbt-linux-amd64 ./cmd/open-vault-cbt
             CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o release/open-vault-cbt-agent-linux-amd64 ./cmd/open-vault-cbt-agent
           fi
+          mkdir -p bundle/docs bundle/deploy
+          cp release/open-vault-linux-amd64 bundle/open-vault
+          cp release/open-vault-cbt-linux-amd64 bundle/open-vault-cbt
+          cp release/open-vault-cbt-agent-linux-amd64 bundle/open-vault-cbt-agent
+          cp start.sh README.md LICENSE config*.example.json bundle/
+          cp docs/*.md bundle/docs/
+          cp deploy/* bundle/deploy/
+          chmod +x bundle/start.sh bundle/open-vault*
+          tar -czf release/open-vault-linux-amd64.tar.gz -C bundle .
           cd release
-          sha256sum open-vault*-linux-amd64 > SHA256SUMS
+          sha256sum open-vault*-linux-amd64 open-vault-linux-amd64.tar.gz > SHA256SUMS
       - name: Upload to existing preview release
         env:
           GH_TOKEN: ${{ github.token }}

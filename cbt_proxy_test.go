@@ -195,8 +195,8 @@ func TestCBTProxyErrorsAndResponseValidation(t *testing.T) {
 		t.Fatal("non-JSON response forwarded")
 	}
 	s.cfg.CBTSocket = filepath.Join(t.TempDir(), "missing.sock")
-	if w = cbtProxyRequest(s, "GET", "/api/cbt/status", ""); w.Code != 503 {
-		t.Fatal("unavailable daemon not isolated")
+	if w = cbtProxyRequest(s, "GET", "/api/cbt/status", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"configured":false`) {
+		t.Fatal("missing daemon should show setup state")
 	}
 }
 

@@ -10,7 +10,7 @@ Linux 宿主机需要 x86_64、Go 1.23+、QEMU、cloud-image-utils、OpenSSH 客
 
 ## 运行
 
-当前 `feature/linux-cbt` 分支每次 push 会触发独立的 **CBT real kernel lab**。工作流同时支持 `workflow_dispatch`；合并到默认分支后，可在 GitHub Actions 中选择 **CBT real kernel lab → Run workflow** 手动运行。此流程不改变普通测试和发布流程。也可以在隔离 Linux 实验主机从仓库根目录运行：
+`main` 与 `feature/linux-cbt` 分支改动驱动、块仓库或实验脚本等受监控路径时，会触发独立的 **CBT real kernel lab**。工作流同时支持 `workflow_dispatch`；合并到默认分支后，可在 GitHub Actions 中选择 **CBT real kernel lab → Run workflow** 手动运行。此流程不改变普通测试和发布流程。也可以在隔离 Linux 实验主机从仓库根目录运行：
 
 ```sh
 CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh

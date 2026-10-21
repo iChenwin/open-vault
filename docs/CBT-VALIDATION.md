@@ -1,6 +1,6 @@
 # V2 CBT 验证记录
 
-日期：2026-10-21。代码在 `feature/linux-cbt`，审阅入口为 [PR #1](https://github.com/iChenwin/open-vault/pull/1)。
+日期：2026-10-21。CBT 实现现已更新到默认分支 `main`，开发分支为 `feature/linux-cbt`，审阅记录为 [PR #1](https://github.com/iChenwin/open-vault/pull/1)。
 
 ## 已完成的用户态验证
 

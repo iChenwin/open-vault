@@ -2,6 +2,8 @@
 
 目标为 Ubuntu 24.04 amd64。先按 [CBT-AGENT.md](CBT-AGENT.md) 配置数据卷、独立仓库、密钥及 root Agent。实际内核支持状态见 [验证记录](CBT-VALIDATION.md)。
 
+第一次只想打开页面，请使用 [新手启动包](QUICKSTART.md)：解压后 `bash start.sh` 即可，不需要先配置 Agent 或 Nginx。
+
 ## 非 root Web 服务
 
 在已有 Go 1.23+ 的主机上构建：
@@ -25,11 +27,12 @@ sudo systemctl enable --now open-vault
 curl --fail http://127.0.0.1:8080/healthz
 ```
 
-已有令牌必须保留，生成命令使用禁止覆盖模式。Web 配置只有三个字段：
+已有令牌必须保留，生成命令使用禁止覆盖模式。Web 配置包含以下字段：
 
 | 字段 | 含义 |
 | --- | --- |
 | `listen` | 本机监听地址，默认 `127.0.0.1:8080` |
+| `allow_lan` | 默认 false；开启后可监听私有 IP 或 `0.0.0.0`，只接受本机和私有网络来源 |
 | `token_file` | 至少 32 字符的私有 API 令牌文件 |
 | `cbt_socket` | 固定 Agent Unix socket 绝对路径 |
 
@@ -37,7 +40,20 @@ Web 不需要访问仓库、源盘或恢复目录。后台超时、状态及恢�
 
 ## 局域网 IP:8080
 
-将 Web 的 `listen` 改为 `127.0.0.1:8081` 并重启，使用 [Nginx 配置样例](../deploy/nginx-lan.conf) 在 8080 提供前端。把防火墙来源限定为自己的局域网；使用 HTTPS 时在反向代理配置证书。浏览器打开 `http://服务器IP:8080`，输入原 API 令牌。
+直接访问无需 Nginx。快速启动使用 `bash start.sh`；固定配置部署时设置：
+
+```json
+{
+  "listen": "0.0.0.0:8080",
+  "allow_lan": true,
+  "token_file": "/etc/open-vault/api-token",
+  "cbt_socket": "/run/open-vault-cbt/agent.sock"
+}
+```
+
+重启 Web 服务后，在同一局域网打开 `http://服务器IP:8080`，输入原口令。服务不信任转发头中的客户端地址，不会自动更改防火墙；请允许自己的局域网访问该端口。HTTP 用于可信局域网，HTTPS 可由反向代理提供。
+
+需要反向代理时，将 Web 的 `listen` 改为 `127.0.0.1:8081`，保持 `allow_lan: false`，使用 [Nginx 配置样例](../deploy/nginx-lan.conf) 在 8080 提供前端。把防火墙来源限定为自己的局域网；使用 HTTPS 时在反向代理配置证书。
 
 也可保留默认监听，通过 SSH 隧道访问：
 

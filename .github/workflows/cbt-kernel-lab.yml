@@ -2,7 +2,7 @@ name: CBT real kernel lab
 
 on:
   push:
-    branches: [feature/linux-cbt]
+    branches: [main, feature/linux-cbt]
     paths:
       - 'cmd/open-vault-cbt/**'
       - 'internal/cbt/**'

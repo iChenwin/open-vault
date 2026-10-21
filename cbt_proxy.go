@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"time"
@@ -122,10 +123,12 @@ func (s *Server) cbtAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := client.Do(upstream)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+		if r.URL.Path == "/api/cbt/status" && errors.Is(err, os.ErrNotExist) {
+			jsonOut(w, http.StatusOK, map[string]bool{"configured": false, "busy": false})
+		} else if errors.Is(err, context.DeadlineExceeded) {
 			jsonOut(w, http.StatusGatewayTimeout, map[string]string{"error": "CBT root service timed out; an operation may already be accepted, inspect runs before retrying"})
 		} else {
-			jsonOut(w, http.StatusServiceUnavailable, map[string]string{"error": "CBT root service is unavailable; file backup remains available"})
+			jsonOut(w, http.StatusServiceUnavailable, map[string]string{"error": "数据卷服务未运行，请按部署指南启动 Agent 后刷新页面"})
 		}
 		return
 	}

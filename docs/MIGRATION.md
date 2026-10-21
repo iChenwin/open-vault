@@ -3,7 +3,7 @@
 此版本按项目方向移除了 restic 依赖、文件备份 API、目录任务调度、文件快照列表及目录恢复界面。运行时、Docker 镜像和 CI 均不再安装或调用该程序。
 
 - 使用新的 `config.example.json` 替换 Web 配置。旧字段会导致明确的启动错误，不能直接沿用。
-- Web 配置仅保留 `listen`、`token_file`、`cbt_socket`。CLI 仓库/密钥/卷配置和 Agent 配置独立管理。
+- Web 配置保留 `listen`、`token_file`、`cbt_socket`，另有可选的 `allow_lan` 开关。CLI 仓库/密钥/卷配置和 Agent 配置独立管理。新手可使用 `bash start.sh` 自动创建 Web 配置。
 - 原 API 令牌可继续使用，密钥文件权限仍须为 0600。
 - 原文件仓库、密码、任务状态和恢复目录不会被读取、转换或删除。旧文件仓库不能作为 CBT 仓库，请保留原恢复工具或旧版本供历史恢复。
 - CBT 需要新的独立仓库、32 字节密钥和跟踪基线。旧文件仓库密码不能替代 CBT 密钥。

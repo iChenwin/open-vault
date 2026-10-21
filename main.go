@@ -25,11 +25,12 @@ import (
 //go:embed web/*
 var assets embed.FS
 
-const version = "0.2.0-alpha.2"
+const version = "0.2.0-alpha.3"
 
 // The web controller has no repository, device, driver or encryption key access.
 type Config struct {
 	Listen    string `json:"listen"`
+	AllowLAN  bool   `json:"allow_lan,omitempty"`
 	TokenFile string `json:"token_file"`
 	CBTSocket string `json:"cbt_socket"`
 }
@@ -74,7 +75,9 @@ func loadConfig(path string) (Config, error) {
 	}
 	ip := net.ParseIP(host)
 	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-		return c, errors.New("listen must be loopback; use a reverse proxy for remote access")
+		if !c.AllowLAN || ip == nil || !(ip.IsUnspecified() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
+			return c, errors.New("LAN listening requires allow_lan=true and a private or wildcard IP address")
+		}
 	}
 	if !filepath.IsAbs(c.TokenFile) || !filepath.IsAbs(c.CBTSocket) {
 		return c, errors.New("token_file and cbt_socket require absolute paths")
@@ -117,6 +120,10 @@ func (s *Server) handler() http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+		if s.cfg.AllowLAN && !localPeer(r.RemoteAddr) {
+			fail(w, http.StatusForbidden, "only local and private-network clients are allowed")
+			return
+		}
 		mux.ServeHTTP(w, r)
 	})
 }
@@ -140,15 +147,29 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	path := flag.String("config", "config.json", "configuration file")
+	quickstart := flag.Bool("quickstart", false, "自动准备配置与登录口令并启动控制台")
+	dataDir := flag.String("data-dir", "", "快速启动配置目录，默认使用当前用户的配置目录")
+	lan := flag.Bool("lan", false, "允许通过局域网 IP 直接访问")
+	port := flag.Int("port", 0, "覆盖监听端口，例如 8080")
 	flag.Parse()
-	cfg, err := loadConfig(*path)
+	var cfg Config
+	var err error
+	if *quickstart {
+		cfg, *path, err = prepareQuickstart(*dataDir)
+	} else {
+		cfg, err = loadConfig(*path)
+	}
 	if err != nil {
+		log.Fatal(err)
+	}
+	if err = applyListenOptions(&cfg, *lan, *port); err != nil {
 		log.Fatal(err)
 	}
 	s, err := newServer(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
+	printStartup(cfg, *path, *quickstart, s.token)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	srv := &http.Server{Addr: cfg.Listen, Handler: s.handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
