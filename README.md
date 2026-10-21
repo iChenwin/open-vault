@@ -56,9 +56,6 @@ go vet ./...
 
 参见 [架构](docs/ARCHITECTURE.md)、[验证记录](docs/VALIDATION.md)、[贡献指南](CONTRIBUTING.md)和[安全策略](SECURITY.md)。
 
-团队讨论由 15 个 AI 专家角色视角完成：[产品与设计（6 位）](docs/product-design.md)、[销售与运营（6 位）](docs/sales-ops.md)、[技术（3 位）](docs/technical-review.md)，并非真实外部人员参与。
-
-路线图：远端代理注册与多机管理、备份保留策略、失败通知、身份与权限、S3 等远端仓库、应用一致性与灾难恢复能力。路线图为方向，尚未承诺交付日期。
 
 ## 许可
 
