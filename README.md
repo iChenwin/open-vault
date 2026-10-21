@@ -19,6 +19,17 @@
 需要 Linux、Go 1.23 或更新版本和可执行的 restic。构建：
 
 ```sh
+sudo apt update
+sudo apt install restic -y
+
+
+wget https://golang.google.cn/dl/go1.23.0.linux-arm64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go1.23.0.linux-arm64.tar.gz
+echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+go version
+
 go build -o open-vault .
 ```
 
@@ -58,9 +69,6 @@ go vet ./...
 
 参见 [架构](docs/ARCHITECTURE.md)、[验证记录](docs/VALIDATION.md)、[贡献指南](CONTRIBUTING.md)和[安全策略](SECURITY.md)。
 
-团队讨论由 15 个 AI 专家角色视角完成：[产品与设计（6 位）](docs/product-design.md)、[销售与运营（6 位）](docs/sales-ops.md)、[技术（3 位）](docs/technical-review.md)，并非真实外部人员参与。
-
-路线图：远端代理注册与多机管理、备份保留策略、失败通知、身份与权限、S3 等远端仓库、应用一致性与灾难恢复能力。路线图为方向，尚未承诺交付日期。
 
 ## 许可
 
