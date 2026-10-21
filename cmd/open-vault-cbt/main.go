@@ -39,7 +39,18 @@ type backupResult struct {
 	TrackingIndexReadBytes int64                 `json:"tracking_index_read_bytes"`
 	OracleReadBytes        int64                 `json:"oracle_read_bytes,omitempty"`
 	FinalizedExisting      bool                  `json:"finalized_existing,omitempty"`
+	ThisRunSourceReadBytes int64                 `json:"this_run_source_read_bytes"`
 }
+type publishedError struct {
+	Generation blockstore.Generation
+	Durability string
+	Cause      error
+}
+
+func (e *publishedError) Error() string {
+	return fmt.Sprintf("generation %s published; durability=%s; snapshot retained for inspection: %v", e.Generation.ID, e.Durability, e.Cause)
+}
+func (e *publishedError) Unwrap() error { return e.Cause }
 
 func randomName() string {
 	var b [16]byte
@@ -173,9 +184,19 @@ func copyOracle(ctx context.Context, src *os.File, size int64, target string) er
 }
 func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracle string) (backupResult, error) {
 	var result backupResult
+	if oracle != "" && os.Getenv("OPEN_VAULT_CBT_LAB") != "1" {
+		return result, errors.New("oracle copying is laboratory-only; requires OPEN_VAULT_CBT_LAB=1")
+	}
 	parent, e := s.Head()
 	if e != nil {
 		return result, e
+	}
+	var previous blockstore.Generation
+	if parent != "" {
+		previous, e = s.Info(parent)
+		if e != nil {
+			return result, e
+		}
 	}
 	tr, e := t.Current(ctx, c.Volume.ID)
 	if e != nil {
@@ -192,6 +213,10 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 		}
 		tr = cbt.Transition{Current: g}
 	} else if tr.Current.Mode == "incremental" {
+		g := tr.Current
+		if parent == "" || previous.SourceID != c.Volume.ID || previous.TrackerUUID != g.UUID || previous.Size != g.Size || previous.Sequence != g.Sequence {
+			return result, errors.New("committed parent does not match active tracking; refusing to rotate snapshot")
+		}
 		tr, e = t.ToSnapshot(ctx, c.Volume.ID, randomName())
 		if e != nil {
 			return result, e
@@ -204,26 +229,24 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 	if e = t.Verify(ctx, c.Volume.ID, g); e != nil {
 		return result, e
 	}
-	var previous blockstore.Generation
 	if parent != "" {
-		previous, e = s.Info(parent)
-		if e != nil {
-			return result, e
-		}
 		if previous.SourceID != c.Volume.ID || previous.TrackerUUID != g.UUID || previous.Size != g.Size {
 			return result, errors.New("source identity, tracking series or volume size changed; new baseline required")
 		}
 		if previous.Sequence == g.Sequence {
 			// The image commit survived but tracker finalization did not. Do not create
 			// another generation or advance the tracker twice.
-			if e = t.ToIncremental(ctx, c.Volume.ID, g); e != nil {
+			if e = s.ConfirmHead(ctx, parent); e != nil {
 				return result, e
+			}
+			if e = t.ToIncremental(ctx, c.Volume.ID, g); e != nil {
+				return result, &publishedError{previous, "confirmed", e}
 			}
 			result.Generation = previous
 			result.FinalizedExisting = true
 			return result, nil
 		}
-		if previous.Sequence > g.Sequence || tr.PreviousSequence != previous.Sequence || tr.PreviousCOW == "" {
+		if previous.Sequence+1 != g.Sequence || tr.PreviousSequence != previous.Sequence || tr.PreviousCOW == "" {
 			return result, errors.New("tracking epoch does not match committed parent; refusing incomplete incremental")
 		}
 	}
@@ -262,15 +285,19 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 	}
 	result.Generation, e = s.Commit(ctx, source, req)
 	if e != nil {
+		if errors.Is(e, blockstore.ErrCommitUncertain) {
+			return result, &publishedError{result.Generation, "uncertain", e}
+		}
 		return result, e
 	}
+	result.ThisRunSourceReadBytes = result.Generation.SourceReadBytes
 	// A failed driver after the snapshot was read must not be silently declared
 	// healthy. Keep its state and image so the operator can inspect the failure.
 	if e = t.Verify(ctx, c.Volume.ID, g); e != nil {
-		return result, fmt.Errorf("image committed but driver verification failed: %w", e)
+		return result, &publishedError{result.Generation, "confirmed", fmt.Errorf("driver verification failed: %w", e)}
 	}
 	if e = t.ToIncremental(ctx, c.Volume.ID, g); e != nil {
-		return result, fmt.Errorf("image committed but tracking finalization failed; retry backup after inspection: %w", e)
+		return result, &publishedError{result.Generation, "confirmed", fmt.Errorf("tracking finalization failed; inspect pending journal before retrying: %w", e)}
 	}
 	return result, nil
 }
@@ -291,6 +318,11 @@ func run(ctx context.Context, args []string) error {
 		return e
 	}
 	op := flags.Arg(0)
+	if op == "backup" {
+		if e = validateDiskSeparation(c, *oracle); e != nil {
+			return e
+		}
+	}
 	if op == "diagnose" {
 		d, e := cbt.NewDriver(cbt.DriverConfig{DBDCtl: c.DBDCtl, StateFile: filepath.Join(c.StateDir, "driver.json"), Volumes: []cbt.Volume{c.Volume}})
 		if e != nil {
@@ -364,7 +396,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if e := run(ctx, os.Args[1:]); e != nil {
-		_ = json.NewEncoder(os.Stderr).Encode(map[string]string{"error": e.Error()})
+		out := map[string]any{"error": e.Error()}
+		var published *publishedError
+		if errors.As(e, &published) {
+			out["generation"] = published.Generation
+			out["committed"] = true
+			out["durability"] = published.Durability
+		}
+		_ = json.NewEncoder(os.Stderr).Encode(out)
 		os.Exit(1)
 	}
 }

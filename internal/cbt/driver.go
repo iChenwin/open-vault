@@ -171,6 +171,10 @@ func NewDriver(c DriverConfig) (*Driver, error) {
 	if err != nil {
 		return nil, errors.New("invalid driver state directory")
 	}
+	parentInfo, err := os.Stat(parent)
+	if err != nil || (runtime.GOOS != "windows" && parentInfo.Mode().Perm()&0077 != 0) {
+		return nil, errors.New("driver state directory must be private (0700)")
+	}
 	c.StateFile = filepath.Join(parent, filepath.Base(c.StateFile))
 	for _, v := range c.Volumes {
 		if pathWithin(v.MountPoint, c.StateFile) {
@@ -818,7 +822,7 @@ type Extent struct {
 // The caller supplies the OLD generation identity and source device byte size.
 // Only a clean, closed, incremental index is accepted; active files are unsafe.
 func ReadChanges(r io.ReaderAt, size int64, uuid string, prevSeq uint64) ([]Extent, error) {
-	if size <= 0 || size%512 != 0 || prevSeq == 0 || !uuidPattern.MatchString(uuid) {
+	if size <= 0 || size > 64<<40 || size%512 != 0 || prevSeq == 0 || !uuidPattern.MatchString(uuid) {
 		return nil, errors.New("invalid COW source size or generation")
 	}
 	var header [4096]byte

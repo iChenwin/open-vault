@@ -15,12 +15,13 @@ import (
 )
 
 type fakeTracker struct {
-	current         cbt.Transition
-	source, index   string
-	size            int64
-	finalizeFailure bool
-	setups, rotates int
-	currentError    error
+	current             cbt.Transition
+	source, index       string
+	size                int64
+	finalizeFailure     bool
+	pendingAfterFailure bool
+	setups, rotates     int
+	currentError        error
 }
 
 const series = "00112233445566778899aabbccddeeff"
@@ -50,6 +51,9 @@ func (f *fakeTracker) ToSnapshot(context.Context, string, string) (cbt.Transitio
 func (f *fakeTracker) ToIncremental(_ context.Context, _ string, g cbt.Generation) error {
 	if f.finalizeFailure {
 		f.finalizeFailure = false
+		if f.pendingAfterFailure {
+			f.currentError = errors.New("pending driver operation; manual inspection required")
+		}
 		return errors.New("simulated driver command failure")
 	}
 	if g.Sequence != f.current.Current.Sequence {
@@ -76,7 +80,7 @@ func coordinatorFixture(t *testing.T) (config, *blockstore.Store, *fakeTracker, 
 	if e != nil {
 		t.Fatal(e)
 	}
-	return config{Volume: cbt.Volume{ID: "data"}}, s, &fakeTracker{source: source, size: int64(len(data)), index: filepath.Join(root, "changes")}, data
+	return config{Repository: filepath.Join(root, "repo"), Volume: cbt.Volume{ID: "data"}}, s, &fakeTracker{source: source, size: int64(len(data)), index: filepath.Join(root, "changes")}, data
 }
 func writeIndex(t *testing.T, path string, seq uint64, blocks int, changed ...int) {
 	t.Helper()
@@ -133,11 +137,20 @@ func TestCoordinatorFullAndTrueIncrementalRanges(t *testing.T) {
 		t.Fatal("baseline mutated")
 	}
 }
-func TestCommitBeforeTrackerFinalizationIsRecoverable(t *testing.T) {
+func TestCommitBeforeCallingTrackerFinalizationIsRecoverable(t *testing.T) {
 	c, s, d, _ := coordinatorFixture(t)
-	d.finalizeFailure = true
-	if _, e := backup(context.Background(), c, s, d, ""); e == nil {
-		t.Fatal("tracking failure hidden")
+	g, e := d.Setup(context.Background(), c.Volume.ID, "first")
+	if e != nil {
+		t.Fatal(e)
+	}
+	source, e := os.Open(d.source)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer source.Close()
+	_, e = s.Commit(context.Background(), source, blockstore.Request{Size: g.Size, SourceID: c.Volume.ID, TrackerUUID: g.UUID, Sequence: g.Sequence})
+	if e != nil {
+		t.Fatal(e)
 	}
 	id, e := s.Head()
 	if e != nil || id == "" {
@@ -149,6 +162,61 @@ func TestCommitBeforeTrackerFinalizationIsRecoverable(t *testing.T) {
 	}
 	if !result.FinalizedExisting || result.Generation.ID != id || d.setups != 1 || d.rotates != 0 {
 		t.Fatal("retry changed committed snapshot")
+	}
+}
+func TestUncertainDriverFinalizationFailsClosed(t *testing.T) {
+	c, s, d, _ := coordinatorFixture(t)
+	d.finalizeFailure = true
+	d.pendingAfterFailure = true
+	_, e := backup(context.Background(), c, s, d, "")
+	var published *publishedError
+	if !errors.As(e, &published) || published.Generation.ID == "" {
+		t.Fatal("published generation missing from error", e)
+	}
+	id, _ := s.Head()
+	if _, e = backup(context.Background(), c, s, d, ""); e == nil {
+		t.Fatal("retried uncertain driver operation")
+	}
+	current, _ := s.Head()
+	if current != id || d.rotates != 0 || d.setups != 1 {
+		t.Fatal("uncertain operation advanced tracker")
+	}
+}
+func TestCommittedPayloadMustVerifyBeforeReleasingSnapshot(t *testing.T) {
+	c, s, d, _ := coordinatorFixture(t)
+	d.finalizeFailure = true
+	if _, e := backup(context.Background(), c, s, d, ""); e == nil {
+		t.Fatal("expected finalization interruption")
+	}
+	id, _ := s.Head()
+	path := filepath.Join(c.Repository, id, "payload")
+	f, e := os.OpenFile(path, os.O_RDWR, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = f.WriteAt([]byte("corrupt"), 10)
+	_ = f.Close()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = backup(context.Background(), c, s, d, ""); e == nil {
+		t.Fatal("released snapshot without verifying payload")
+	}
+	if d.current.Current.Mode != "snapshot" {
+		t.Fatal("snapshot released after corrupt commit")
+	}
+}
+func TestParentIdentityCheckedBeforeRotatingSnapshot(t *testing.T) {
+	c, s, d, _ := coordinatorFixture(t)
+	if _, e := backup(context.Background(), c, s, d, ""); e != nil {
+		t.Fatal(e)
+	}
+	c.Volume.ID = "wrong-source"
+	if _, e := backup(context.Background(), c, s, d, ""); e == nil {
+		t.Fatal("accepted wrong parent identity")
+	}
+	if d.rotates != 0 {
+		t.Fatal("rotated tracker before parent identity check")
 	}
 }
 func TestTrackerLossNeverResetsBaseline(t *testing.T) {

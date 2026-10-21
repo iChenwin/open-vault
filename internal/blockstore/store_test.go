@@ -402,3 +402,63 @@ func TestKeyFilesAndInvalidStoreInputs(t *testing.T) {
 		t.Fatal("nil context accepted")
 	}
 }
+
+func TestConfirmHeadVerifiesAndPreservesPublishedGeneration(t *testing.T) {
+	s := newTestStore(t)
+	base := commit(t, s, bytes.NewReader(bytes.Repeat([]byte{0x21}, 4096)), request(4096, "", 1))
+	g := commit(t, s, bytes.NewReader(bytes.Repeat([]byte{0x42}, 4096)), request(4096, base.ID, 2, Extent{512, 512}))
+	before, err := os.ReadFile(filepath.Join(s.root, "HEAD"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ConfirmHead(context.Background(), g.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Reopening simulates an independent retry that only knows the durable ID.
+	reopened, err := Open(s.root, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = reopened.ConfirmHead(context.Background(), g.ID); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(filepath.Join(s.root, "HEAD"))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("confirmation changed HEAD", err)
+	}
+	info, err := s.Info(g.ID)
+	if err != nil || info != g {
+		t.Fatal("confirmation changed authenticated generation", err)
+	}
+	for _, id := range []string{"", base.ID, "../invalid", strings.Repeat("a", 32)} {
+		if err = s.ConfirmHead(context.Background(), id); err == nil {
+			t.Fatalf("confirmed non-HEAD ID %q", id)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err = s.ConfirmHead(ctx, g.ID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("confirmation ignored cancellation: %v", err)
+	}
+	if err = s.ConfirmHead(nil, g.ID); err == nil {
+		t.Fatal("confirmation accepted nil context")
+	}
+}
+
+func TestConfirmHeadRejectsPayloadAndManifestTampering(t *testing.T) {
+	for _, file := range []string{"payload", "manifest.enc"} {
+		t.Run(file, func(t *testing.T) {
+			s := newTestStore(t)
+			base := commit(t, s, bytes.NewReader(bytes.Repeat([]byte{1}, 4096)), request(4096, "", 1))
+			g := commit(t, s, nil, request(4096, base.ID, 2))
+			// ConfirmHead must inspect ancestors, not just current metadata.
+			flipByte(t, filepath.Join(s.root, base.ID, file))
+			if err := s.ConfirmHead(context.Background(), g.ID); err == nil {
+				t.Fatal("confirmed tampered generation chain")
+			}
+			if head, err := s.Head(); err != nil || head != g.ID {
+				t.Fatal("failed confirmation changed HEAD", err)
+			}
+		})
+	}
+}

@@ -30,7 +30,7 @@ const manifestMagic = "OVBS1\n"
 
 // ErrCommitUncertain means HEAD was atomically published but its directory sync
 // failed. The returned Generation identifies the committed data; a coordinator
-// must inspect HEAD/Info before acknowledging the tracker sequence. All other
+// must successfully ConfirmHead before acknowledging the tracker sequence. All other
 // Commit errors occur before HEAD publication and leave HEAD unchanged.
 var ErrCommitUncertain = errors.New("generation published but HEAD durability is uncertain")
 
@@ -189,6 +189,79 @@ func (s *Store) Info(id string) (Generation, error) {
 	}
 	defer l.payload.Close()
 	return l.m.Generation, nil
+}
+
+// ConfirmHead verifies the complete published image and repeats the HEAD file
+// and repository directory syncs before a coordinator releases its snapshot.
+// It resolves a prior ErrCommitUncertain without reading the source device or
+// creating another generation. The caller must still hold its process-wide
+// repository lock; mu serializes against commits through this Store instance.
+func (s *Store) ConfirmHead(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ctx == nil {
+		return errors.New("context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !validID(id) {
+		return errors.New("confirmation requires an explicit generation ID")
+	}
+	head, err := s.Head()
+	if err != nil {
+		return err
+	}
+	if head != id {
+		return errors.New("generation is not current HEAD; refusing confirmation")
+	}
+	if err = s.Verify(ctx, id); err != nil {
+		return fmt.Errorf("cannot confirm HEAD image: %w", err)
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	// O_RDWR permits FlushFileBuffers in Windows development tests. No writes
+	// occur here; HEAD must already exist and be a regular file.
+	f, err := os.OpenFile(filepath.Join(s.root, "HEAD"), os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("HEAD must be a regular file")
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 1024))
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(b)) != id {
+		return errors.New("HEAD changed during confirmation")
+	}
+	if err = f.Sync(); err != nil {
+		return fmt.Errorf("cannot sync HEAD confirmation: %w", err)
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = syncDir(s.root); err != nil {
+		return fmt.Errorf("cannot sync HEAD directory confirmation: %w", err)
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	head, err = s.Head()
+	if err != nil {
+		return err
+	}
+	if head != id {
+		return errors.New("HEAD changed during confirmation")
+	}
+	return nil
 }
 
 func hashHex(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
