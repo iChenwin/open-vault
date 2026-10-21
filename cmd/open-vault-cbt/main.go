@@ -217,6 +217,9 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 		if parent == "" || previous.SourceID != c.Volume.ID || previous.TrackerUUID != g.UUID || previous.Size != g.Size || previous.Sequence != g.Sequence {
 			return result, errors.New("committed parent does not match active tracking; refusing to rotate snapshot")
 		}
+		if e = s.CheckAppend(parent, g.Size); e != nil {
+			return result, e
+		}
 		tr, e = t.ToSnapshot(ctx, c.Volume.ID, randomName())
 		if e != nil {
 			return result, e
@@ -250,19 +253,8 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 			return result, errors.New("tracking epoch does not match committed parent; refusing incomplete incremental")
 		}
 	}
-	source, e := os.Open(g.SnapshotDevice)
-	if e != nil {
+	if e = s.CheckAppend(parent, g.Size); e != nil {
 		return result, e
-	}
-	defer source.Close()
-	if oracle != "" {
-		if os.Getenv("OPEN_VAULT_CBT_LAB") != "1" {
-			return result, errors.New("oracle copying is laboratory-only; requires OPEN_VAULT_CBT_LAB=1")
-		}
-		if e = copyOracle(ctx, source, g.Size, oracle); e != nil {
-			return result, e
-		}
-		result.OracleReadBytes = g.Size
 	}
 	req := blockstore.Request{Parent: parent, Size: g.Size, SourceID: c.Volume.ID, TrackerUUID: g.UUID, Sequence: g.Sequence}
 	if parent != "" {
@@ -280,6 +272,20 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 		}
 		result.TrackingIndexReadBytes = 4096 + ((g.Size+4095)/4096)*8
 	}
+	if e = blockstore.ValidateCapacity(req); e != nil {
+		return result, e
+	}
+	source, e := os.Open(g.SnapshotDevice)
+	if e != nil {
+		return result, e
+	}
+	defer source.Close()
+	if oracle != "" {
+		if e = copyOracle(ctx, source, g.Size, oracle); e != nil {
+			return result, e
+		}
+		result.OracleReadBytes = g.Size
+	}
 	if e = t.Verify(ctx, c.Volume.ID, g); e != nil {
 		return result, e
 	}
@@ -291,6 +297,10 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 		return result, e
 	}
 	result.ThisRunSourceReadBytes = result.Generation.SourceReadBytes
+	// The kernel refuses to retire a snapshot device while it has open readers.
+	if e = source.Close(); e != nil {
+		return result, &publishedError{result.Generation, "confirmed", e}
+	}
 	// A failed driver after the snapshot was read must not be silently declared
 	// healthy. Keep its state and image so the operator can inspect the failure.
 	if e = t.Verify(ctx, c.Volume.ID, g); e != nil {

@@ -22,6 +22,7 @@ type fakeTracker struct {
 	pendingAfterFailure bool
 	setups, rotates     int
 	currentError        error
+	beforeFinalize      func() error
 }
 
 const series = "00112233445566778899aabbccddeeff"
@@ -49,6 +50,11 @@ func (f *fakeTracker) ToSnapshot(context.Context, string, string) (cbt.Transitio
 	return f.current, nil
 }
 func (f *fakeTracker) ToIncremental(_ context.Context, _ string, g cbt.Generation) error {
+	if f.beforeFinalize != nil {
+		if err := f.beforeFinalize(); err != nil {
+			return err
+		}
+	}
 	if f.finalizeFailure {
 		f.finalizeFailure = false
 		if f.pendingAfterFailure {

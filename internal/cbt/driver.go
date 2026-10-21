@@ -23,7 +23,7 @@ import (
 )
 
 const UpstreamCommit = "68bf21b8a9e74d1c8aac967238f81e189963c0a1"
-const UpstreamVersion = "0.12.0"
+const UpstreamVersion = "0.12.0-ov1"
 
 // ErrNoGeneration only means this journal has never tracked the requested
 // volume. Other failures must never trigger automatic setup or baseline reuse.
@@ -557,7 +557,7 @@ func (d *Driver) status(v Volume) (Generation, error) {
 		return Generation{}, err
 	}
 	if info.Version != UpstreamVersion {
-		return Generation{}, errors.New("dattobd version is not the validated 0.12.0")
+		return Generation{}, errors.New("dattobd version is not the required experimental build " + UpstreamVersion)
 	}
 	for _, s := range info.Devices {
 		if s.Minor != v.Minor {
@@ -658,7 +658,7 @@ func (d *Driver) Setup(ctx context.Context, id, cowName string) (Generation, err
 		return Generation{}, err
 	}
 	if info.Version != UpstreamVersion {
-		return Generation{}, errors.New("dattobd version is not the validated 0.12.0")
+		return Generation{}, errors.New("dattobd version is not the required experimental build " + UpstreamVersion)
 	}
 	for _, s := range info.Devices {
 		device, _ := filepath.EvalSymlinks(s.BlockDevice)

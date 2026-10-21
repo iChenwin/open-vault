@@ -330,6 +330,9 @@ func (s *Store) Commit(ctx context.Context, src io.ReaderAt, req Request) (Gener
 	if ctx == nil {
 		return zero, errors.New("context is required")
 	}
+	if err := ValidateCapacity(req); err != nil {
+		return zero, err
+	}
 	ranges, err := extents(req)
 	if err != nil {
 		return zero, err

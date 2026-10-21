@@ -23,9 +23,13 @@ git clone --branch v0.12.0 --depth 1 https://github.com/datto/dattobd.git /home/
 cd /home/lab/dattobd
 [[ $(git rev-parse HEAD) == "$commit" ]] || { echo 'dattobd tag did not resolve to the audited commit.' >&2; exit 1; }
 printf '%s\n' "$commit" > "$results/dattobd-commit.txt"
+python3 /home/lab/payload/prepare-driver.py /home/lab/dattobd
+git diff -- src/bio_helper.c src/dattobd.h > "$results/external-driver-build.diff"
 # Upstream installs its shared library under /usr/local/lib64.
 install -d /usr/local/lib64
 make -j2
+grep -q '^#define HAVE_ENUM_REQ_OP_WRITE_ZEROES' src/kernel-config.h
+cp src/kernel-config.h "$results/driver-kernel-config.h"
 make install
 printf '/usr/local/lib64\n' > /etc/ld.so.conf.d/open-vault-dattobd-lab.conf
 ldconfig

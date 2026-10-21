@@ -24,6 +24,7 @@ CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh
 
 - guest 必须报告 Ubuntu `24.04`、`6.8.*-generic` GA 内核；其他发行版和 HWE 内核直接失败，不扩展为已支持。
 - dattobd 固定为 `v0.12.0` 的 commit `68bf21b8a9e74d1c8aac967238f81e189963c0a1`；构建前验证 tag 解析结果。
+- 对外部源码运行准备脚本，修正 Linux 6.x zero-write 特性宏引用并标记 `0.12.0-ov1`；记录 diff、生成特性配置及模块版本。外部源码及其修改保留上游 GPL，不合入 MIT 实现。
 - 两个文件系统使用独立备份仓库和 agent 状态，minor 分别为 0、1，期间不卸载驱动。
 - virtio 磁盘配置不向宿主传递 discard，guest 对新建实验盘设置并确认 `discard_max_bytes=0`，使用 `nodiscard` 挂载。
 - 模块自身在创建快照与状态切换时协调冻结 / 解冻，测试不在外部先执行 `fsfreeze`。
