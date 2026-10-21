@@ -1,0 +1,74 @@
+name: Verify released console package
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published console preview tag
+        required: true
+        default: v0.2.0-alpha.3
+permissions:
+  contents: read
+jobs:
+  downloaded-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download, verify and launch the published package
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          [[ $RELEASE_TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[a-zA-Z0-9.]+$ ]]
+          work=$(mktemp -d "$RUNNER_TEMP/console-package.XXXXXXXX")
+          cd "$work"
+          base="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG"
+          curl --fail --silent --show-error --location --retry 3 "$base/open-vault-linux-amd64.tar.gz" -o package.tar.gz
+          curl --fail --silent --show-error --location --retry 3 "$base/SHA256SUMS" -o SHA256SUMS
+          expected=$(awk '$2 == "open-vault-linux-amd64.tar.gz" {print $1}' SHA256SUMS)
+          [[ $expected =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  package.tar.gz\n' "$expected" | sha256sum --check -
+          mkdir package
+          tar -xzf package.tar.gz -C package
+          test -x package/open-vault
+          test -x package/open-vault-cbt
+          test -x package/open-vault-cbt-agent
+          test -f package/docs/QUICKSTART.md
+          export XDG_CONFIG_HOME="$work/settings"
+          pid=''
+          cleanup() {
+            if [[ -n $pid ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+          }
+          trap cleanup EXIT
+          start_console() {
+            bash "$work/package/start.sh" -port 18080 > "$work/console.log" 2>&1 &
+            pid=$!
+            for attempt in $(seq 1 30); do
+              kill -0 "$pid" 2>/dev/null || { echo 'Package exited before readiness.' >&2; return 1; }
+              if curl --noproxy '*' --fail --silent --max-time 1 http://127.0.0.1:18080/healthz >/dev/null; then return 0; fi
+              sleep 1
+            done
+            echo 'Console readiness timed out.' >&2
+            return 1
+          }
+          start_console
+          token=$(cat "$XDG_CONFIG_HOME/open-vault/api-token")
+          echo "::add-mask::$token"
+          ip=$(hostname -I | tr ' ' '\n' | awk '/^10\./ || /^192\.168\./ || /^172\.(1[6-9]|2[0-9]|3[01])\./ {print; exit}')
+          test -n "$ip"
+          curl --noproxy '*' --fail --silent "http://$ip:18080/" > page.html
+          grep -q '打开备份控制台' page.html
+          [[ $(curl --noproxy '*' --silent -o /dev/null -w '%{http_code}' "http://$ip:18080/api/status") == 401 ]]
+          curl --noproxy '*' --fail --silent -H "Authorization: Bearer $token" "http://$ip:18080/api/status" > status.json
+          python3 -c 'import json,os; assert json.load(open("status.json"))["version"] == os.environ["RELEASE_TAG"][1:]'
+          curl --noproxy '*' --fail --silent -H "Authorization: Bearer $token" "http://$ip:18080/api/cbt/status" > agent.json
+          python3 -c 'import json; assert json.load(open("agent.json"))["configured"] is False'
+          grep -q "http://$ip:18080" console.log
+          cleanup
+          pid=''
+          start_console
+          [[ $(cat "$XDG_CONFIG_HOME/open-vault/api-token") == "$token" ]]
+          curl --noproxy '*' --fail --silent -H "Authorization: Bearer $token" "http://$ip:18080/api/status" > /dev/null
+          echo 'Published package: checksum, startup script, LAN page, authentication, setup state and restart PASS.'
