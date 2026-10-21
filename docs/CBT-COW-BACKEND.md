@@ -1,6 +1,6 @@
 # COW 后端改造边界
 
-当前 CBT 备份尚未通过真实内核验收。[ov1 实验](https://github.com/iChenwin/open-vault/actions/runs/39565285985) 的 ext4 全量恢复与参考快照一致，增量恢复的整卷摘要不一致。ov2 已修正一处确认的 zero-write 漏跟踪，但不能据此认定全部差异已消除。
+当前 CBT 备份尚未通过真实内核验收。[ov1 实验](https://github.com/iChenwin/open-vault/actions/runs/39565285985) 的 ext4 全量恢复与参考快照一致，增量恢复的整卷摘要不一致。ov2 已修正一处确认的 zero-write 漏跟踪，但[复验](https://github.com/iChenwin/open-vault/actions/runs/39568439019)仍有两个未标记的 4 KiB 块不一致，虽文件系统及测试文件检查通过，仍未通过整卷验收。细节见 [验证记录](CBT-VALIDATION.md)。
 
 ## 同卷 COW 的问题
 
@@ -25,6 +25,8 @@
 5. 外部驱动改动保留 GPL 许可及可复现源码差异，Go 控制台和仓库继续独立实现。
 
 这需要驱动功能开发，并非配置开关。尚未实施或验收。
+
+另一候选是具有外置差异存储的 [blksnap](https://github.com/veeam/blksnap/tree/a162bc2064dbb1dbadf12bd1fc628bf82338d14f)，研究锁定 standalone `VAL-13.1` / `release_13.1.0.252`，提交 `a162bc2064dbb1dbadf12bd1fc628bf82338d14f`，不是内核集成用的 master。其独立 CLI 提供快照生命周期、CBT UUID/计数和位图导出，但需要新增适配，且尚未在本项目的 Ubuntu 24.04 / 6.8.0-147 验证构建或运行。上游[许可](https://github.com/veeam/blksnap/blob/a162bc2064dbb1dbadf12bd1fc628bf82338d14f/README.md#licensing)分别约束模块、工具和库，不能作为 MIT 实现直接复制。本版没有自动安装或切换到此候选。
 
 ## 完成条件
 
