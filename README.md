@@ -49,7 +49,7 @@ ssh -L 8080:127.0.0.1:8080 user@backup-host
 
 ## 开发与参与
 
-Ubuntu 24.04 / GA 6.8 普通 ext4/XFS 数据卷的真实 CBT 能力正在独立实验分支开发，使用内核驱动和加密块仓库。参见 [V2 设计](docs/CBT-V2-DESIGN.md)、[实验命令](docs/CBT-USAGE.md)及[内核验证流程](docs/CBT-LAB.md)。它尚未接入此 Web 控制台，也不代表已经具备 ABB 的完整能力。
+Ubuntu 24.04 / GA 6.8 普通 ext4/XFS 数据卷的真实 CBT 能力正在独立实验分支开发，使用内核驱动和加密块仓库，可通过独立本地 Agent 接入控制台。参见 [V2 设计](docs/CBT-V2-DESIGN.md)、[实验命令](docs/CBT-USAGE.md)、[控制台接入](docs/CBT-AGENT.md)及[内核验证流程](docs/CBT-LAB.md)。支持状态以对应提交的真实实验结果为准，不代表已经具备 ABB 的完整能力。CBT 实验优先使用 Linux 主机部署，原有 Docker 镜像不会自动安装驱动或特权 Agent。
 
 ```sh
 go test ./...

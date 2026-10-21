@@ -4,3 +4,10 @@
 /config.json
 *.test
 coverage.out
+/open-vault-cbt
+/open-vault-cbt.exe
+/open-vault-cbt-agent
+/open-vault-cbt-agent.exe
+/config.cbt.json
+/config.cbt-agent.json
+/artifacts/

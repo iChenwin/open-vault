@@ -41,6 +41,7 @@ type Config struct {
 	RestoreRoot  string   `json:"restore_root"`
 	SourceRoots  []string `json:"source_roots"`
 	ResticBinary string   `json:"restic_binary"`
+	CBTSocket    string   `json:"cbt_socket,omitempty"`
 	Timeout      int      `json:"operation_timeout_minutes"`
 }
 type Job struct {
@@ -138,6 +139,9 @@ func loadConfig(path string) (Config, error) {
 	}
 	if len(c.SourceRoots) == 0 {
 		return c, errors.New("source_roots is required")
+	}
+	if c.CBTSocket != "" && !filepath.IsAbs(c.CBTSocket) {
+		return c, errors.New("cbt_socket must be an absolute Unix socket path")
 	}
 	return c, nil
 }
@@ -278,6 +282,10 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	supplied := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare([]byte(supplied), []byte(s.token)) != 1 {
 		fail(w, 401, "valid Bearer token required")
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/cbt/") {
+		s.cbtAPI(w, r)
 		return
 	}
 	switch {

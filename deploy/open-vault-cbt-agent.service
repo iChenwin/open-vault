@@ -1,0 +1,31 @@
+[Unit]
+Description=Open Vault privileged CBT data-volume agent
+After=local-fs.target systemd-modules-load.service
+RequiresMountsFor=/srv/business-data /backup/open-vault-cbt /restore/cbt-images
+
+[Service]
+Type=simple
+User=root
+Group=open-vault
+ExecStart=/usr/local/bin/open-vault-cbt-agent -config /etc/open-vault/cbt-agent.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+RuntimeDirectory=open-vault-cbt
+RuntimeDirectoryMode=0750
+StateDirectory=open-vault-cbt-service
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+# Adapt these paths to the approved volume and the two private configuration files.
+# ProtectSystem=full protects system directories, not every other writable path.
+ReadWritePaths=/srv/business-data/.open-vault-cbt /backup/open-vault-cbt /var/lib/open-vault-cbt /restore/cbt-images
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX
+TimeoutStopSec=150
+
+[Install]
+WantedBy=multi-user.target

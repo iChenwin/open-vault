@@ -1,0 +1,8 @@
+{
+  "socket_path": "/run/open-vault-cbt/agent.sock",
+  "cli_binary": "/usr/local/bin/open-vault-cbt",
+  "cli_config": "/etc/open-vault/cbt.json",
+  "state_dir": "/var/lib/open-vault-cbt-service",
+  "restore_root": "/restore/cbt-images",
+  "operation_timeout_minutes": 120
+}

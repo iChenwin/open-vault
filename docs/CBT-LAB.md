@@ -6,11 +6,11 @@
 
 宿主机只下载镜像、创建普通 qcow2 / raw 文件并启动 QEMU，不格式化或挂载任何宿主机块设备。没有将宿主机 `/dev`、业务盘或共享文件系统传入 guest。guest 仅格式化同时满足以下条件的两块盘：virtio serial 分别为 `OPENVAULT_CBT_EXT4` / `OPENVAULT_CBT_XFS`、大小恰为 512 MiB、没有分区、挂载点或已有文件系统。任何检查失败即停止。
 
-Linux 宿主机需要 x86_64、Go 1.23+、QEMU、cloud-image-utils、OpenSSH 客户端、curl 和 Python 3。GitHub 工作流安装所需宿主工具；特权的文件系统操作和驱动加载仅发生在 guest。宿主机允许时使用 KVM，否则使用 TCG，二者均启动真实 Linux 内核，TCG 速度较慢。
+Linux 宿主机需要 x86_64、Go 1.23+、QEMU、cloud-image-utils、OpenSSH 客户端、curl 和 Python 3。GitHub 工作流安装所需宿主工具；特权的文件系统操作和驱动加载仅发生在 guest。`auto` 默认使用 TCG，避免仅凭 `/dev/kvm` 存在就假设嵌套虚拟化可用；在已知可用的主机上可显式选择 KVM。二者均启动真实 Linux 内核，TCG 速度较慢。
 
 ## 运行
 
-在 GitHub Actions 中选择 **CBT real kernel lab → Run workflow**。它是独立的 `workflow_dispatch` 流程，不改变普通测试和发布流程。也可以在隔离 Linux 实验主机从仓库根目录运行：
+当前 `feature/linux-cbt` 分支每次 push 会触发独立的 **CBT real kernel lab**。工作流同时支持 `workflow_dispatch`；合并到默认分支后，可在 GitHub Actions 中选择 **CBT real kernel lab → Run workflow** 手动运行。此流程不改变普通测试和发布流程。也可以在隔离 Linux 实验主机从仓库根目录运行：
 
 ```sh
 CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh

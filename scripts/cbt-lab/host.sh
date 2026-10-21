@@ -62,7 +62,9 @@ cloud-localds "$work/seed.img" "$work/user-data" "$work/meta-data"
 
 accel=${CBT_LAB_ACCEL:-auto}
 if [[ $accel == auto ]]; then
-  if [[ -r /dev/kvm && -w /dev/kvm ]]; then accel=kvm; else accel=tcg; fi
+  # Hosted runners may expose /dev/kvm without a functioning nested guest.
+  # Prefer the reproducible software CPU unless an operator explicitly requests KVM.
+  accel=tcg
 fi
 case "$accel" in
   kvm) cpu=host ;;
@@ -73,8 +75,9 @@ printf '%s\n' "$accel" > "$results/acceleration.txt"
 printf 'QEMU acceleration: %s\n' "$accel"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 qemu-system-x86_64 \
-  -machine "q35,accel=$accel" -cpu "$cpu" -smp 2 -m 3072 \
+  -machine "q35,accel=$accel" -cpu "$cpu" -smp 2 -m 2048 \
   -display none -monitor none -serial "file:$work/serial.log" \
+  -device virtio-rng-pci \
   -drive "file=$work/root.qcow2,format=qcow2,if=virtio,discard=ignore" \
   -drive "file=$work/seed.img,format=raw,if=virtio,readonly=on" \
   -drive "file=$work/ext4.raw,format=raw,if=none,id=ext4,discard=ignore" \

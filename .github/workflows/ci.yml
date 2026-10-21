@@ -19,4 +19,7 @@ jobs:
           RESTIC_TEST_BINARY: /usr/bin/restic
         run: go test -race -count=1 -v ./...
       - name: Build
-        run: CGO_ENABLED=0 go build -trimpath -o open-vault .
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o open-vault .
+          CGO_ENABLED=0 go build -trimpath -o open-vault-cbt ./cmd/open-vault-cbt
+          CGO_ENABLED=0 go build -trimpath -o open-vault-cbt-agent ./cmd/open-vault-cbt-agent

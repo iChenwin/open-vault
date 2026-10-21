@@ -7,5 +7,6 @@
   "restore_root": "/restore",
   "source_roots": ["/data"],
   "restic_binary": "restic",
+  "cbt_socket": "",
   "operation_timeout_minutes": 120
 }
