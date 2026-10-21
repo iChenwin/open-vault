@@ -18,7 +18,7 @@ CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh
 
 脚本打印一次性工作目录及结果目录。默认结果保存在 `artifacts/cbt-kernel-lab`。工作目录中的虚拟磁盘保留以便调查，本地运行完后由部署者确认路径再自行删除；GitHub runner 会随任务结束回收。请预留约 10 GiB 可用空间，允许下载官方云镜像以及 guest 安装依赖。没有将私钥或备份密钥上传到工作流 artifact。
 
-`CBT_LAB_ACCEL` 可选 `auto`、`kvm` 或 `tcg`；`CBT_LAB_RESULTS` 指定结果目录。默认云镜像目录为 `https://cloud-images.ubuntu.com/noble/current`。`CBT_LAB_IMAGE_BASE` 可指定 Canonical 的历史镜像目录，以复现实验；镜像及 `SHA256SUMS` 必须来自同一可信来源。当前镜像随时间更新，实际下载 URL 和校验值写入结果。SHA256 校验用于检测下载内容与发布清单的一致性，没有替代镜像来源认证。
+`CBT_LAB_ACCEL` 可选 `auto`、`kvm` 或 `tcg`；`CBT_LAB_RESULTS` 指定结果目录。默认云镜像目录为 `https://cloud-images.ubuntu.com/noble/current`。`CBT_LAB_IMAGE_BASE` 可指定 Canonical 的历史镜像目录，以复现实验；镜像及 `SHA256SUMS` 必须来自同一可信来源。使用同一镜像目录 `unpacked` 中校验过的 kernel/initrd 直接启动，强制输出串口日志，绕过固件及 GRUB；这不验证启动恢复能力。当前镜像随时间更新，实际下载 URL、磁盘及 kernel/initrd 校验值写入结果。SHA256 校验用于检测下载内容与发布清单的一致性，没有替代镜像来源认证。
 
 ## 固定条件
 

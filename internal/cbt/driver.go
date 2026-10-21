@@ -370,6 +370,9 @@ func (d *Driver) validateVolume(v Volume) error {
 	if err != nil || !st.IsDir() || st.Mode().Perm()&0077 != 0 {
 		return errors.New("COW directory must be private (0700)")
 	}
+	if err := protectCOWHierarchy(v.MountPoint, v.COWDir); err != nil {
+		return err
+	}
 	data, err := readLimited(d.config.MountInfoPath, 4<<20)
 	if err != nil {
 		return errors.New("mount information unavailable")
