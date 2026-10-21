@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -25,7 +26,7 @@ import (
 //go:embed web/*
 var assets embed.FS
 
-const version = "0.2.0-alpha.3"
+const version = "0.2.0-alpha.4"
 
 // The web controller has no repository, device, driver or encryption key access.
 type Config struct {
@@ -169,6 +170,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	requestedListen := cfg.Listen
+	listener, err := listenConsole(&cfg, *quickstart && *port == 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
+	s.cfg = cfg
+	if cfg.Listen != requestedListen {
+		fmt.Printf("原监听地址 %s 不可用，已使用 %s；请以本次显示的访问地址为准。\n", requestedListen, cfg.Listen)
+	}
 	printStartup(cfg, *path, *quickstart, s.token)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -180,7 +191,7 @@ func main() {
 		_ = srv.Shutdown(shutdown)
 	}()
 	log.Printf("Open Vault %s CBT console listening at http://%s", version, cfg.Listen)
-	if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err = srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }

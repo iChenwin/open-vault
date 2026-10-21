@@ -2,12 +2,51 @@ package main
 
 import (
 	"encoding/json"
+	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestOccupiedPortFallbackAndExplicitPort(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer occupied.Close()
+	original := occupied.Addr().String()
+	fixed := Config{Listen: original}
+	if listener, err := listenConsole(&fixed, false); err == nil {
+		listener.Close()
+		t.Fatal("explicit occupied port should fail")
+	}
+	if fixed.Listen != original {
+		t.Fatal("explicit address changed")
+	}
+	if occupied.Addr().(*net.TCPAddr).Port > 65525 {
+		t.Skip("ephemeral port too close to range end for fallback test")
+	}
+	automatic := Config{Listen: original}
+	listener, err := listenConsole(&automatic, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	host, text, _ := net.SplitHostPort(automatic.Listen)
+	port, _ := strconv.Atoi(text)
+	base := occupied.Addr().(*net.TCPAddr).Port
+	if host != "127.0.0.1" || port <= base || port > base+10 {
+		t.Fatal("fallback escaped its host or bounded range", automatic.Listen)
+	}
+	connection, err := net.Dial("tcp", automatic.Listen)
+	if err != nil {
+		t.Fatal("reported address is not bound", err)
+	}
+	connection.Close()
+}
 
 func TestQuickstartPreservesTokenAndExistingConfig(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "settings")

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"syscall"
 )
 
 func localPeer(address string) bool {
@@ -114,6 +115,36 @@ func applyListenOptions(cfg *Config, lan bool, port int) error {
 	}
 	cfg.Listen = net.JoinHostPort(host, existingPort)
 	return nil
+}
+
+// Bind before displaying any success URLs. Only interactive quickstart may try
+// the next ten ports; an explicitly chosen port or service config stays fixed.
+func listenConsole(cfg *Config, automatic bool) (net.Listener, error) {
+	host, portText, err := net.SplitHostPort(cfg.Listen)
+	if err != nil {
+		return nil, err
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 0 || port > 65535 {
+		return nil, errors.New("监听端口无效，请填写 1 到 65535")
+	}
+	var lastErr error
+	for offset := 0; offset <= 10 && port+offset <= 65535; offset++ {
+		address := net.JoinHostPort(host, strconv.Itoa(port+offset))
+		listener, err := net.Listen("tcp", address)
+		if err == nil {
+			cfg.Listen = net.JoinHostPort(host, strconv.Itoa(listener.Addr().(*net.TCPAddr).Port))
+			return listener, nil
+		}
+		lastErr = err
+		// Windows reports Winsock WSAEADDRINUSE (10048), rather than the
+		// portable syscall errno used by Unix.
+		occupied := errors.Is(err, syscall.EADDRINUSE) || (runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(10048)))
+		if !automatic || !occupied {
+			break
+		}
+	}
+	return nil, fmt.Errorf("无法启动监听 %s：%w；请用 -port 指定其他端口，或检查占用程序", cfg.Listen, lastErr)
 }
 
 func printStartup(cfg Config, path string, showToken bool, token string) {

@@ -18,7 +18,7 @@
 
 ### 新手先打开控制台
 
-下载 [Linux amd64 启动包](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.3)，解压后运行：
+下载 [Linux amd64 启动包](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.4)，解压后运行：
 
 ```sh
 bash start.sh

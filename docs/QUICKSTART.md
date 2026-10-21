@@ -4,15 +4,15 @@
 
 ## 1. 下载启动包
 
-打开 [v0.2.0-alpha.3 下载页面](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.3)，下载 `open-vault-linux-amd64.tar.gz`。无需安装 Go、Nginx 或 Docker。
+打开 [v0.2.0-alpha.4 下载页面](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.4)，下载 `open-vault-linux-amd64.tar.gz`。无需安装 Go、Nginx 或 Docker。
 
 服务器没有浏览器时，可以逐行复制：
 
 ```sh
 mkdir -p ~/open-vault-preview
 cd ~/open-vault-preview
-curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.3/open-vault-linux-amd64.tar.gz
-curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.3/SHA256SUMS
+curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.4/open-vault-linux-amd64.tar.gz
+curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.4/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS
 tar -xzf open-vault-linux-amd64.tar.gz
 ```
@@ -35,11 +35,13 @@ bash start.sh
 登录口令：（这里会显示你的实际口令）
 ```
 
+默认端口为 8080。快速启动发现端口被占用时，会依次尝试后续十个端口，成功监听后才显示访问地址；请以本次窗口显示的端口为准。显式指定 `-port` 时会固定使用该端口，冲突就报错，不会悄悄切换。
+
 保留这个窗口。按 Ctrl+C 会停止服务；再次运行同一命令即可启动。需要开机自动运行时参见 [服务部署](DEPLOYMENT.md)。
 
 ## 3. 用电脑或手机打开
 
-让设备连接同一局域网，在浏览器输入启动窗口中的地址，例如 `http://192.168.1.50:8080`。复制启动窗口的登录口令，粘贴到网页并进入控制台。
+让设备连接同一局域网，在浏览器输入启动窗口中的地址，例如 `http://192.168.1.50:8080`。复制启动窗口的登录口令，粘贴到网页并进入控制台。当前采用单一管理员口令，不需要填写用户名，也没有预设的 admin 密码；服务器的 root 用户名不用于网页登录。
 
 不需要反向代理。访问口令仍然必填；直接访问模式仅接受本机及私有网络来源。请在可信局域网使用 HTTP，跨网访问应配置 HTTPS 反向代理。
 
