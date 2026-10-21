@@ -36,18 +36,24 @@ manifest() {
 validate_restore() {
   local fs=$1 config=$2 generation=$3 oracle=$4 expected=$5 label=$6 out=$7
   local restored="$out/$label-restored.img" mountpoint="$out/check-$label" digest_oracle digest_restored
+  local raw_equal=true fs_clean=true
   open-vault-cbt -config "$config" -generation "$generation" verify > "$results/$fs-$label-verify.json"
   open-vault-cbt -config "$config" -generation "$generation" -target "$restored" restore > "$results/$fs-$label-restore.json"
   digest_oracle=$(sha256sum "$oracle" | cut -d' ' -f1)
   digest_restored=$(sha256sum "$restored" | cut -d' ' -f1)
   printf '%s oracle=%s reconstructed=%s\n' "$label" "$digest_oracle" "$digest_restored" | tee "$results/$fs-$label-image-hashes.txt"
-  [[ $digest_oracle == "$digest_restored" ]]
-  cmp -- "$oracle" "$restored"
+  if [[ $digest_oracle != "$digest_restored" ]] || ! cmp -- "$oracle" "$restored"; then
+    raw_equal=false
+    python3 /home/lab/payload/image-diff.py "$oracle" "$restored" "$results/$fs-$label-image-diff.json"
+    # Only synthetic fixture volumes exist in this disposable guest.
+    filefrag -v -b4096 /mnt/open-vault-lab-"$fs"/.open-vault-cbt/* > "$results/$fs-$label-cow-extents.txt" 2>&1 || true
+    cp "$out/agent-state/driver.json" "$results/$fs-$label-driver-journal.json"
+  fi
   # These are read-only checks against the byte-identical reconstruction.
   if [[ $fs == ext4 ]]; then
-    e2fsck -fn "$restored" > "$results/$fs-$label-fsck.log" 2>&1
+    e2fsck -fn "$restored" > "$results/$fs-$label-fsck.log" 2>&1 || fs_clean=false
   else
-    xfs_repair -n -f "$restored" > "$results/$fs-$label-fsck.log" 2>&1
+    xfs_repair -n -f "$restored" > "$results/$fs-$label-fsck.log" 2>&1 || fs_clean=false
   fi
   mkdir -p "$mountpoint"
   if [[ $fs == ext4 ]]; then
@@ -60,6 +66,8 @@ validate_restore() {
   diff -u "$expected" "$results/$fs-$label-restored-files.sha256"
   umount "$mountpoint"
   mounted=''
+  # File recovery evidence cannot override a raw-image or filesystem mismatch.
+  [[ $raw_equal == true && $fs_clean == true ]]
 }
 
 # Identify BOTH pristine disks before formatting either one.

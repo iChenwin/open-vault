@@ -19,7 +19,7 @@ if [[ -d /home/lab/payload/driver-bundle ]]; then
   apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends xfsprogs e2fsprogs openssl python3 jq
   cd /home/lab/payload/driver-bundle
   sha256sum --check SHA256SUMS
-  [[ $(modinfo -F version ./dattobd.ko) == 0.12.0-ov1 ]] || exit 1
+  [[ $(modinfo -F version ./dattobd.ko) == 0.12.0-ov2 ]] || exit 1
   [[ $(modinfo -F vermagic ./dattobd.ko) == "$(uname -r) "* ]] || exit 1
   install -D -m 0644 dattobd.ko "/lib/modules/$(uname -r)/updates/dattobd.ko"
   install -D -m 0755 libdattobd.so.1 /usr/local/lib64/libdattobd.so.1
@@ -34,7 +34,7 @@ cd /home/lab/dattobd
 [[ $(git rev-parse HEAD) == "$commit" ]] || { echo 'dattobd tag did not resolve to the audited commit.' >&2; exit 1; }
 printf '%s\n' "$commit" > "$results/dattobd-commit.txt"
 python3 /home/lab/payload/prepare-driver.py /home/lab/dattobd
-git diff -- src/bio_helper.c src/dattobd.h > "$results/external-driver-build.diff"
+git diff -- src/bio_helper.c src/tracer.c src/dattobd.h > "$results/external-driver-build.diff"
 # Upstream installs its shared library under /usr/local/lib64.
 install -d /usr/local/lib64
 make -j2

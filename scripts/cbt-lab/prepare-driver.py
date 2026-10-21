@@ -19,7 +19,8 @@ if subprocess.check_output(["git", "-C", str(source), "status", "--porcelain"], 
 # Correct only that identifier, preserving upstream's zero-write COW handling.
 for relative, old, new in [
     ("src/bio_helper.c", "HAVE_ENUM_REQ_OPF_WRITE_ZEROES", "HAVE_ENUM_REQ_OP_WRITE_ZEROES"),
-    ("src/dattobd.h", 'DATTOBD_VERSION "0.12.0"', 'DATTOBD_VERSION "0.12.0-ov1"'),
+    ("src/tracer.c", '#ifdef HAVE_ENUM_REQ_OPF\n        //#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)\n        if (bio_op(bio) == REQ_OP_WRITE_ZEROES)', '#if defined HAVE_ENUM_REQ_OPF || (defined HAVE_ENUM_REQ_OP && defined HAVE_ENUM_REQ_OP_WRITE_ZEROES)\n        //#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)\n        if (bio_op(bio) == REQ_OP_WRITE_ZEROES)'),
+    ("src/dattobd.h", 'DATTOBD_VERSION "0.12.0"', 'DATTOBD_VERSION "0.12.0-ov2"'),
 ]:
     path = source / relative
     content = path.read_text()
@@ -27,4 +28,4 @@ for relative, old, new in [
         raise SystemExit("Unexpected upstream content in " + relative)
     path.write_text(content.replace(old, new))
 
-print("Prepared external GPL dattobd 0.12.0-ov1; its upstream license still applies.")
+print("Prepared external GPL dattobd 0.12.0-ov2; its upstream license still applies.")

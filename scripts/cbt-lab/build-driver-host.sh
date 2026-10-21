@@ -21,7 +21,7 @@ python3 "$(dirname -- "$0")/prepare-driver.py" "$workspace/dattobd"
 printf '%s\n' "$commit" > "$results/dattobd-commit.txt"
 printf 'native Ubuntu 24.04 host compiler; target guest kernel=%s; no host module install/load\n' "$kernel" > "$results/driver-build-location.txt"
 cd "$workspace/dattobd"
-git diff -- src/bio_helper.c src/dattobd.h > "$results/external-driver-build.diff"
+git diff -- src/bio_helper.c src/tracer.c src/dattobd.h > "$results/external-driver-build.diff"
 make -j2 KERNELVERSION="$kernel"
 grep -q '^#define HAVE_ENUM_REQ_OP_WRITE_ZEROES' src/kernel-config.h
 cp src/kernel-config.h "$results/driver-kernel-config.h"

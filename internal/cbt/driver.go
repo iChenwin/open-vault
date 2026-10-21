@@ -23,7 +23,7 @@ import (
 )
 
 const UpstreamCommit = "68bf21b8a9e74d1c8aac967238f81e189963c0a1"
-const UpstreamVersion = "0.12.0-ov1"
+const UpstreamVersion = "0.12.0-ov2"
 
 // ErrNoGeneration only means this journal has never tracked the requested
 // volume. Other failures must never trigger automatic setup or baseline reuse.

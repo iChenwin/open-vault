@@ -137,7 +137,7 @@ done
 "${guest[@]}" 'mkdir -p /home/lab/payload /home/lab/results'
 scp "${ssh_opts[@]}" -P "$port" "$work/open-vault-cbt" \
   "$repo/scripts/cbt-lab/guest-prepare.sh" "$repo/scripts/cbt-lab/guest-test.sh" \
-  "$repo/scripts/cbt-lab/prepare-driver.py" lab@127.0.0.1:/home/lab/payload/
+  "$repo/scripts/cbt-lab/prepare-driver.py" "$repo/scripts/cbt-lab/image-diff.py" lab@127.0.0.1:/home/lab/payload/
 
 # Native compilation avoids spending most TCG time compiling feature tests.
 # Only the disposable guest installs and loads the resulting kernel module.
