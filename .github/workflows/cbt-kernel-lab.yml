@@ -1,0 +1,45 @@
+name: CBT real kernel lab
+
+on:
+  push:
+    branches: [feature/linux-cbt]
+  workflow_dispatch:
+    inputs:
+      acceleration:
+        description: QEMU acceleration (auto falls back to real emulated CPU)
+        type: choice
+        default: auto
+        options: [auto, kvm, tcg]
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-24-04-ga-ext4-xfs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Install file-backed virtual machine tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils openssh-client acl
+      - name: Enable runner user access to KVM when available
+        run: |
+          if [ -c /dev/kvm ]; then
+            sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          fi
+      - name: Real guest driver, full + incremental, ext4 + XFS recovery
+        env:
+          CBT_LAB_ACCEL: ${{ inputs.acceleration }}
+          CBT_LAB_RESULTS: ${{ runner.temp }}/cbt-kernel-results
+        run: bash scripts/cbt-lab/host.sh
+      - name: Upload kernel and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbt-ubuntu-24.04-ga6.8-ext4-xfs-${{ github.run_id }}
+          path: ${{ runner.temp }}/cbt-kernel-results
+          if-no-files-found: warn
+          retention-days: 14

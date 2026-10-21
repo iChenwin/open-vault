@@ -1,0 +1,13 @@
+{
+  "repository": "/backup/open-vault-cbt",
+  "key_file": "/etc/open-vault/cbt-key",
+  "state_dir": "/var/lib/open-vault-cbt",
+  "volume": {
+    "id": "business-data",
+    "device": "/dev/disk/by-uuid/REPLACE_WITH_DATA_VOLUME_UUID",
+    "mount_point": "/srv/business-data",
+    "cow_dir": "/srv/business-data/.open-vault-cbt",
+    "minor": 0
+  },
+  "dbdctl": "/usr/local/bin/dbdctl"
+}
