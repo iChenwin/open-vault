@@ -70,6 +70,7 @@ case "$accel" in
   *) echo 'CBT_LAB_ACCEL must be auto, kvm or tcg.' >&2; exit 1 ;;
 esac
 printf '%s\n' "$accel" > "$results/acceleration.txt"
+printf 'QEMU acceleration: %s\n' "$accel"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 qemu-system-x86_64 \
   -machine "q35,accel=$accel" -cpu "$cpu" -smp 2 -m 3072 \
@@ -87,12 +88,20 @@ ssh_opts=(-i "$work/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=accept
   -o UserKnownHostsFile="$work/known_hosts" -o ConnectTimeout=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 guest=(ssh "${ssh_opts[@]}" -p "$port" lab@127.0.0.1)
 ready=false
-for _ in $(seq 1 180); do
+for attempt in $(seq 1 120); do
   kill -0 "$qemu_pid" 2>/dev/null || { cat "$work/qemu.log" >&2; exit 1; }
-  if "${guest[@]}" true 2>/dev/null; then ready=true; break; fi
-  sleep 5
+  # Persist boot evidence while waiting, including when the runner cancels the
+  # shell before its EXIT trap can finish. Bound the entire SSH handshake.
+  cp -- "$work/serial.log" "$results/serial.log" 2>/dev/null || true
+  cp -- "$work/qemu.log" "$results/qemu.log" 2>/dev/null || true
+  if timeout 8s "${guest[@]}" true 2>"$results/ssh-readiness.log"; then ready=true; break; fi
+  if (( attempt % 12 == 0 )); then
+    printf 'Waiting for guest SSH, attempt %s; recent serial output:\n' "$attempt"
+    tail -n 5 "$work/serial.log" || true
+  fi
+  sleep 2
 done
-[[ $ready == true ]] || { echo 'Guest SSH readiness timed out.' >&2; exit 1; }
+[[ $ready == true ]] || { echo 'Guest SSH readiness timed out.' >&2; tail -n 100 "$work/serial.log" >&2; cat "$results/ssh-readiness.log" >&2; exit 1; }
 "${guest[@]}" 'sudo cloud-init status --wait'
 
 (cd "$repo" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$work/open-vault-cbt" ./cmd/open-vault-cbt)
