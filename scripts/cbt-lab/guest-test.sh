@@ -44,7 +44,7 @@ validate_restore() {
   printf '%s oracle=%s reconstructed=%s\n' "$label" "$digest_oracle" "$digest_restored" | tee "$results/$fs-$label-image-hashes.txt"
   if [[ $digest_oracle != "$digest_restored" ]] || ! cmp -- "$oracle" "$restored"; then
     raw_equal=false
-    python3 /home/lab/payload/image-diff.py "$oracle" "$restored" "$results/$fs-$label-image-diff.json"
+    python3 /home/lab/payload/image-diff.py "$oracle" "$restored" "$results/$fs-$label-image-diff.json" "$out/agent-state/driver.json"
     # Only synthetic fixture volumes exist in this disposable guest.
     filefrag -v -b4096 /mnt/open-vault-lab-"$fs"/.open-vault-cbt/* > "$results/$fs-$label-cow-extents.txt" 2>&1 || true
     cp "$out/agent-state/driver.json" "$results/$fs-$label-driver-journal.json"
