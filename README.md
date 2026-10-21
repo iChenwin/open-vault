@@ -19,6 +19,17 @@
 需要 Linux、Go 1.23 或更新版本和可执行的 restic。构建：
 
 ```sh
+sudo apt update
+sudo apt install restic -y
+
+
+wget https://golang.org/dl/go1.22.0.linux-arm64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go1.22.0.linux-arm64.tar.gz
+echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+go version
+
 go build -o open-vault .
 ```
 
