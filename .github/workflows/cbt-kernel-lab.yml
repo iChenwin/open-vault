@@ -3,6 +3,12 @@ name: CBT real kernel lab
 on:
   push:
     branches: [feature/linux-cbt]
+    paths:
+      - 'cmd/open-vault-cbt/**'
+      - 'internal/cbt/**'
+      - 'internal/blockstore/**'
+      - 'scripts/cbt-lab/**'
+      - '.github/workflows/cbt-kernel-lab.yml'
   workflow_dispatch:
     inputs:
       acceleration:

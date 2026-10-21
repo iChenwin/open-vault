@@ -37,6 +37,19 @@ awk -v img="$image" '$2 == img || $2 == "*" img { print $1 "  " img }' "$work/SH
 cp -- "$work/image.sha256" "$results/image.sha256"
 printf '%s/%s\n' "$base" "$image" > "$results/image-url.txt"
 
+# Boot Canonical's matching kernel directly, so a firmware/GRUB failure cannot
+# leave the lab waiting for SSH with an empty serial console. This tests data
+# volume CBT, not bootloader or bare-metal recovery.
+curl --fail --location --retry 3 "$base/unpacked/SHA256SUMS" -o "$work/kernel-SHA256SUMS"
+for component in vmlinuz initrd; do
+  name="noble-server-cloudimg-amd64-$component-generic"
+  curl --fail --location --retry 3 "$base/unpacked/$name" -o "$work/$name"
+  awk -v img="$name" '$2 == img || $2 == "*" img { print $1 "  " img }' "$work/kernel-SHA256SUMS" > "$work/$component.sha256"
+  [[ $(wc -l < "$work/$component.sha256") == 1 ]] || { echo 'Missing unique kernel/initrd checksum.' >&2; exit 1; }
+  (cd "$work" && sha256sum --check "$component.sha256")
+  cp -- "$work/$component.sha256" "$results/$component.sha256"
+done
+
 qemu-img create -f qcow2 -F qcow2 -b "$work/$image" "$work/root.qcow2" 20G
 qemu-img create -f raw "$work/ext4.raw" 512M
 qemu-img create -f raw "$work/xfs.raw" 512M
@@ -58,7 +71,16 @@ package_update: false
 package_upgrade: false
 EOF
 printf 'instance-id: open-vault-cbt-%s\nlocal-hostname: open-vault-cbt-lab\n' "$(date +%s)" > "$work/meta-data"
-cloud-localds "$work/seed.img" "$work/user-data" "$work/meta-data"
+cat > "$work/network-config" <<'EOF'
+version: 2
+ethernets:
+  labnet0:
+    match:
+      macaddress: "52:54:00:12:34:56"
+    set-name: labnet0
+    dhcp4: true
+EOF
+cloud-localds --network-config "$work/network-config" "$work/seed.img" "$work/user-data" "$work/meta-data"
 
 accel=${CBT_LAB_ACCEL:-auto}
 if [[ $accel == auto ]]; then
@@ -78,6 +100,10 @@ qemu-system-x86_64 \
   -machine "q35,accel=$accel" -cpu "$cpu" -smp 2 -m 2048 \
   -display none -monitor none -serial "file:$work/serial.log" \
   -device virtio-rng-pci \
+  -kernel "$work/noble-server-cloudimg-amd64-vmlinuz-generic" \
+  -initrd "$work/noble-server-cloudimg-amd64-initrd-generic" \
+  -append 'root=LABEL=cloudimg-rootfs ro console=ttyS0,115200n8 loglevel=6' \
+  -no-reboot \
   -drive "file=$work/root.qcow2,format=qcow2,if=virtio,discard=ignore" \
   -drive "file=$work/seed.img,format=raw,if=virtio,readonly=on" \
   -drive "file=$work/ext4.raw,format=raw,if=none,id=ext4,discard=ignore" \
@@ -85,7 +111,7 @@ qemu-system-x86_64 \
   -drive "file=$work/xfs.raw,format=raw,if=none,id=xfs,discard=ignore" \
   -device virtio-blk-pci,drive=xfs,serial=OPENVAULT_CBT_XFS \
   -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$port-:22" \
-  -device virtio-net-pci,netdev=net0 > "$work/qemu.log" 2>&1 &
+  -device virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56 > "$work/qemu.log" 2>&1 &
 qemu_pid=$!
 ssh_opts=(-i "$work/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=accept-new
   -o UserKnownHostsFile="$work/known_hosts" -o ConnectTimeout=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
