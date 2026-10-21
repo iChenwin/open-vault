@@ -5,7 +5,7 @@ on:
       tag:
         description: Existing release tag to build
         required: true
-        default: v0.2.0-alpha.4
+        default: v0.2.0-alpha.5
 permissions:
   contents: write
 jobs:
@@ -30,13 +30,20 @@ jobs:
           cp release/open-vault-linux-amd64 bundle/open-vault
           cp release/open-vault-cbt-linux-amd64 bundle/open-vault-cbt
           cp release/open-vault-cbt-agent-linux-amd64 bundle/open-vault-cbt-agent
-          cp start.sh README.md LICENSE config*.example.json bundle/
+          cp start.sh doctor.sh README.md LICENSE config*.example.json bundle/
           cp docs/*.md bundle/docs/
           cp deploy/* bundle/deploy/
           chmod +x bundle/start.sh bundle/open-vault*
           tar -czf release/open-vault-linux-amd64.tar.gz -C bundle .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o release/open-vault-linux-arm64-console .
+          mkdir -p bundle-arm64/docs
+          cp release/open-vault-linux-arm64-console bundle-arm64/open-vault
+          cp start.sh doctor.sh README.md LICENSE config.example.json bundle-arm64/
+          cp docs/*.md bundle-arm64/docs/
+          chmod +x bundle-arm64/start.sh bundle-arm64/doctor.sh bundle-arm64/open-vault
+          tar -czf release/open-vault-linux-arm64-console.tar.gz -C bundle-arm64 .
           cd release
-          sha256sum open-vault*-linux-amd64 open-vault-linux-amd64.tar.gz > SHA256SUMS
+          sha256sum open-vault*-linux-amd64 open-vault-linux-amd64.tar.gz open-vault-linux-arm64-console open-vault-linux-arm64-console.tar.gz > SHA256SUMS
       - name: Upload to existing preview release
         env:
           GH_TOKEN: ${{ github.token }}

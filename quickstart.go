@@ -150,6 +150,14 @@ func listenConsole(cfg *Config, automatic bool) (net.Listener, error) {
 func printStartup(cfg Config, path string, showToken bool, token string) {
 	host, port, _ := net.SplitHostPort(cfg.Listen)
 	fmt.Printf("\nOpen Vault %s · 开发预览\n配置文件：%s\n", version, path)
+	environment := inspectEnvironment(cfg.CBTSocket)
+	fmt.Printf("当前环境：%s / %s / %s %s / 内核 %s\n%s\n", environment.OS, environment.Architecture, environment.Distribution, environment.DistributionVersion, environment.Kernel, environment.Message)
+	for _, issue := range environment.Issues {
+		fmt.Println("环境检查：" + issue)
+	}
+	if !environment.AgentSocketPresent {
+		fmt.Println("后台服务未连接：本命令只启动网页，不会自动安装 Agent 或内核驱动。可运行 bash doctor.sh 查看诊断。")
+	}
 	if cfg.AllowLAN && net.ParseIP(host) != nil && net.ParseIP(host).IsUnspecified() {
 		fmt.Printf("本机访问：http://127.0.0.1:%s\n", port)
 		addresses, _ := net.InterfaceAddrs()

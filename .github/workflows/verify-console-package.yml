@@ -5,7 +5,7 @@ on:
       tag:
         description: Published console preview tag
         required: true
-        default: v0.2.0-alpha.4
+        default: v0.2.0-alpha.5
 permissions:
   contents: read
 jobs:
@@ -72,3 +72,46 @@ jobs:
           [[ $(cat "$XDG_CONFIG_HOME/open-vault/api-token") == "$token" ]]
           curl --noproxy '*' --fail --silent -H "Authorization: Bearer $token" "http://$ip:18080/api/status" > /dev/null
           echo 'Published package: checksum, startup script, LAN page, authentication, setup state and restart PASS.'
+  arm64-console-emulation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Install user-mode ARM64 emulator
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user
+      - name: Verify ARM64 console binary without claiming kernel-driver support
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          [[ $RELEASE_TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[a-zA-Z0-9.]+$ ]]
+          work=$(mktemp -d "$RUNNER_TEMP/arm-console.XXXXXXXX")
+          cd "$work"
+          base="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG"
+          curl --fail --silent --show-error --location --retry 3 "$base/open-vault-linux-arm64-console.tar.gz" -o package.tar.gz
+          curl --fail --silent --show-error --location --retry 3 "$base/SHA256SUMS" -o SHA256SUMS
+          expected=$(awk '$2 == "open-vault-linux-arm64-console.tar.gz" {print $1}' SHA256SUMS)
+          [[ $expected =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  package.tar.gz\n' "$expected" | sha256sum --check -
+          mkdir package
+          tar -xzf package.tar.gz -C package
+          test -x package/open-vault
+          test ! -e package/open-vault-cbt
+          test ! -e package/open-vault-cbt-agent
+          qemu-aarch64 package/open-vault -quickstart -lan -port 18082 -data-dir "$work/settings" > console.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 60); do
+            kill -0 "$pid" 2>/dev/null || { echo 'ARM64 console exited.' >&2; exit 1; }
+            if curl --noproxy '*' --fail --silent --max-time 1 http://127.0.0.1:18082/healthz >/dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          [[ $ready == true ]]
+          token=$(cat "$work/settings/api-token")
+          echo "::add-mask::$token"
+          curl --noproxy '*' --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:18082/api/status > status.json
+          python3 -c 'import json; e=json.load(open("status.json"))["environment"]; assert e["architecture"]=="arm64" and not e["platform_match"] and not e["backup_validated"]'
+          echo 'ARM64 console package: checksum, emulated startup, authentication and unsupported-CBT preflight PASS. Physical ARM64 and kernel CBT not verified.'

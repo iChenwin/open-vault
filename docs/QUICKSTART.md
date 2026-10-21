@@ -1,20 +1,29 @@
 # 第一次使用 Open Vault
 
-适用于 Ubuntu 24.04、x86_64 / amd64。当前发布为**控制台开发预览**：可以启动页面、从局域网登录；CBT 增量恢复仍有已知一致性问题，不能作为正式备份使用。
+当前发布为**控制台开发预览**：可以启动页面、从局域网登录；CBT 增量恢复仍有已知一致性问题，不能作为正式备份使用。内核 CBT 适配目标为 Ubuntu 24.04、x86_64 / amd64、GA 6.8 generic。ARM64 可体验控制台，但不提供该架构的内核备份。
+
+启动时会自动显示控制台所在设备的架构、发行版、内核与 Agent 通信入口状态；登录后也会显示。环境匹配与备份可用是两件事：当前 x86 主机也需要单独部署后台，尚未实现开箱备份。预检不会代替实际 Agent 和驱动自身的检查。
 
 ## 1. 下载启动包
 
-打开 [v0.2.0-alpha.4 下载页面](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.4)，下载 `open-vault-linux-amd64.tar.gz`。无需安装 Go、Nginx 或 Docker。
+先运行 `uname -m` 确认架构：`x86_64` 选择 `open-vault-linux-amd64.tar.gz`；`aarch64` 选择 `open-vault-linux-arm64-console.tar.gz`。ARM64 包只有控制台，不包含备份 CLI 和 Agent；它不代表 ARM64 CBT 已适配，物理 ARM64 设备尚需实机验证。
+
+打开 [v0.2.0-alpha.5 下载页面](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.5)，下载 `open-vault-linux-amd64.tar.gz`。无需安装 Go、Nginx 或 Docker。
 
 服务器没有浏览器时，可以逐行复制：
 
 ```sh
 mkdir -p ~/open-vault-preview
 cd ~/open-vault-preview
-curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.4/open-vault-linux-amd64.tar.gz
-curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.4/SHA256SUMS
+case "$(uname -m)" in
+  x86_64) ov_package=open-vault-linux-amd64.tar.gz ;;
+  aarch64) ov_package=open-vault-linux-arm64-console.tar.gz ;;
+  *) echo '当前架构没有预编译启动包'; exit 1 ;;
+esac
+curl -fLO "https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.5/$ov_package"
+curl -fLO https://github.com/iChenwin/open-vault/releases/download/v0.2.0-alpha.5/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS
-tar -xzf open-vault-linux-amd64.tar.gz
+tar -xzf "$ov_package"
 ```
 
 校验应显示启动包 `OK`。如果下载或校验失败，先解决错误，再继续。
@@ -50,6 +59,14 @@ bash start.sh
 ## 4. 页面打开后
 
 「未配置」表示控制台已经能访问，但备份数据卷服务还没准备好。快速启动不会安装内核模块、选择磁盘或自动进行备份。
+
+如果页面显示「环境未适配」，部署 Agent 并不能解决架构、系统或内核不匹配。例如 ARM64 / Ubuntu 20.04 / 5.10 目前只能体验控制台。可运行一条只读诊断命令：
+
+```sh
+bash doctor.sh
+```
+
+该脚本不会更改系统、磁盘或服务，也不会读取登录口令和仓库密钥；磁盘列表使用兼容 Ubuntu 20.04 的 `MOUNTPOINT` 列。
 
 研究备份功能时，再按 [数据卷服务配置](CBT-AGENT.md) 在可销毁的 Ubuntu 测试机准备驱动、仓库、加密密钥和 Agent。启动包包含三个程序，但只有 `open-vault` 是网页服务；另外两个由测试管理员配置。准备源卷前请先读 [真实验证结果](CBT-VALIDATION.md)。
 

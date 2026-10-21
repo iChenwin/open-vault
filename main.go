@@ -26,7 +26,7 @@ import (
 //go:embed web/*
 var assets embed.FS
 
-const version = "0.2.0-alpha.4"
+const version = "0.2.0-alpha.5"
 
 // The web controller has no repository, device, driver or encryption key access.
 type Config struct {
@@ -136,7 +136,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == "GET" && r.URL.Path == "/api/status" {
-		jsonOut(w, 200, map[string]any{"version": version, "mode": "cbt", "configured": s.cfg.CBTSocket != ""})
+		jsonOut(w, 200, map[string]any{"version": version, "mode": "cbt", "configured": s.cfg.CBTSocket != "", "environment": inspectEnvironment(s.cfg.CBTSocket)})
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/cbt/") {

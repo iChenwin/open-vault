@@ -18,13 +18,15 @@
 
 ### 新手先打开控制台
 
-下载 [Linux amd64 启动包](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.4)，解压后运行：
+下载 [Linux 启动包](https://github.com/iChenwin/open-vault/releases/tag/v0.2.0-alpha.5)，解压后运行：
 
 ```sh
 bash start.sh
 ```
 
-不需要 Go 或 Nginx。程序自动准备配置和登录口令，并显示局域网访问地址。在同一局域网的电脑或手机打开 `http://服务器IP:8080`，输入启动窗口里的口令即可。页面打开不代表备份已配置或通过恢复验收；完整步骤和排查见 [新手入门](docs/QUICKSTART.md)。
+amd64 选择 `open-vault-linux-amd64.tar.gz`，ARM64 仅体验网页时选择 `open-vault-linux-arm64-console.tar.gz`。ARM64 包不包含备份后端。
+
+不需要 Go 或 Nginx。程序自动准备配置和登录口令，并显示局域网访问地址。在同一局域网的电脑或手机打开 `http://服务器IP:8080`，输入启动窗口里的口令即可。启动时和登录后会明确显示环境及后台部署状态。当前 x86 用户也需要单独部署后台，尚未实现开箱备份。页面打开不代表备份已配置或通过恢复验收；完整步骤和排查见 [新手入门](docs/QUICKSTART.md)。
 
 ### 从源码构建
 
