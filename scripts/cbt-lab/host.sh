@@ -151,7 +151,8 @@ if [[ $profile == dattobd ]]; then
     "$lab_scripts/guest-prepare.sh" "$lab_scripts/guest-test.sh" \
     "$lab_scripts/prepare-driver.py" "$lab_scripts/image-diff.py" lab@127.0.0.1:/home/lab/payload/
 else
-  scp "${ssh_opts[@]}" -P "$port" "$lab_scripts/guest-prepare.sh" "$lab_scripts/guest-test.sh" lab@127.0.0.1:/home/lab/payload/
+  (cd "$repo" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$work/open-vault-cbt" ./cmd/open-vault-cbt)
+  scp "${ssh_opts[@]}" -P "$port" "$work/open-vault-cbt" "$lab_scripts/guest-prepare.sh" "$lab_scripts/guest-test.sh" "$lab_scripts/guest-app-test.sh" lab@127.0.0.1:/home/lab/payload/
 fi
 
 # Native compilation avoids spending most TCG time compiling feature tests.
@@ -171,12 +172,18 @@ fi
 
 # Preserve diagnostics even when compilation, module loading, or a real backup fails.
 set +e
-"${guest[@]}" 'sudo bash /home/lab/payload/guest-prepare.sh && sudo bash /home/lab/payload/guest-test.sh' 2>&1 | tee "$results/guest-console.log"
-rc=${PIPESTATUS[0]}
+if [[ $profile == blksnap ]]; then
+  "${guest[@]}" 'sudo bash /home/lab/payload/guest-prepare.sh && sudo bash /home/lab/payload/guest-test.sh && sudo bash /home/lab/payload/guest-app-test.sh' 2>&1 | tee "$results/guest-console.log"
+  rc=${PIPESTATUS[0]}
+else
+  "${guest[@]}" 'sudo bash /home/lab/payload/guest-prepare.sh && sudo bash /home/lab/payload/guest-test.sh' 2>&1 | tee "$results/guest-console.log"
+  rc=${PIPESTATUS[0]}
+fi
 "${guest[@]}" 'sudo dmesg > /home/lab/results/dmesg.log; sudo journalctl -b --no-pager > /home/lab/results/journal.log; sudo cp /proc/datto-info /home/lab/results/datto-final.json 2>/dev/null; sudo chown -R lab:lab /home/lab/results' 2>/dev/null
 scp "${ssh_opts[@]}" -P "$port" -r lab@127.0.0.1:/home/lab/results/. "$results/"
 copy_rc=$?
 set -e
 [[ $rc == 0 && $copy_rc == 0 ]] || { echo "Real kernel lab failed: guest=$rc artifact-copy=$copy_rc" >&2; exit 1; }
 test -f "$results/SUCCESS"
+if [[ $profile == blksnap ]]; then test -f "$results/APP_SUCCESS"; fi
 echo 'Real ext4 + XFS kernel CBT verification passed.'

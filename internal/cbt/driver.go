@@ -75,6 +75,7 @@ type DeviceStatus struct {
 }
 
 type Report struct {
+	Provider      string         `json:"provider,omitempty"`
 	Supported     bool           `json:"supported"`
 	Kernel        string         `json:"kernel"`
 	Architecture  string         `json:"architecture"`
@@ -271,7 +272,7 @@ func (d *Driver) Diagnose(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 	kernel, supported := d.platform()
-	r := Report{Supported: supported, Kernel: kernel, Architecture: runtime.GOARCH, Devices: []DeviceStatus{}, Problems: []string{}}
+	r := Report{Provider: "dattobd", Supported: supported, Kernel: kernel, Architecture: runtime.GOARCH, Devices: []DeviceStatus{}, Problems: []string{}}
 	if !supported {
 		r.Problems = append(r.Problems, "experimental tracking requires Ubuntu 24.04 GA 6.8 generic kernel on amd64")
 	}
@@ -345,6 +346,10 @@ func parseMounts(data []byte) ([]mountEntry, error) {
 }
 
 func (d *Driver) validateVolume(v Volume) error {
+	return d.validateVolumeWithLocation(v, false)
+}
+
+func (d *Driver) validateVolumeWithLocation(v Volume, external bool) error {
 	if runtime.GOOS != "linux" {
 		return errors.New("block tracking requires Linux")
 	}
@@ -370,8 +375,20 @@ func (d *Driver) validateVolume(v Volume) error {
 	if err != nil || !st.IsDir() || st.Mode().Perm()&0077 != 0 {
 		return errors.New("COW directory must be private (0700)")
 	}
-	if err := protectCOWHierarchy(v.MountPoint, v.COWDir); err != nil {
-		return err
+	if external {
+		if pathWithin(v.MountPoint, v.COWDir) {
+			return errors.New("external COW directory must be outside the protected mount")
+		}
+		if err := protectCOWHierarchy("/", v.COWDir); err != nil {
+			return err
+		}
+		if err := externalCOWFilesystem(v.Device, v.COWDir); err != nil {
+			return err
+		}
+	} else {
+		if err := protectCOWHierarchy(v.MountPoint, v.COWDir); err != nil {
+			return err
+		}
 	}
 	data, err := readLimited(d.config.MountInfoPath, 4<<20)
 	if err != nil {

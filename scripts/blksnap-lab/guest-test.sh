@@ -49,17 +49,27 @@ info() {
 }
 validate_image() {
   local label=$1 image=$2 oracle=$3 expected=$4
+  local inspection=$image
   sha256sum "$oracle" "$image" > "$results/$fs-$label-image-hashes.txt"
   cmp -- "$oracle" "$image"
   if [[ $fs == ext4 ]]; then
     e2fsck -fn "$image" > "$results/$fs-$label-fsck.log" 2>&1
   else
-    xfs_repair -n -f "$image" > "$results/$fs-$label-fsck.log" 2>&1
+    # A frozen XFS image can contain a valid log requiring replay. Keep both
+    # raw comparison images immutable and replay only a disposable copy.
+    inspection=$out/$label-inspection.img
+    cp --reflink=auto -- "$image" "$inspection"
+    check_mount=$out/check-$label-replay
+    mkdir -p "$check_mount"
+    mount -o loop,nouuid "$inspection" "$check_mount"
+    umount "$check_mount"
+    check_mount=''
+    xfs_repair -n -f "$inspection" > "$results/$fs-$label-fsck.log" 2>&1
   fi
   check_mount=$out/check-$label
   mkdir -p "$check_mount"
   if [[ $fs == ext4 ]]; then mount -o loop,ro,noload "$image" "$check_mount";
-  else mount -o loop,ro,norecovery,nouuid "$image" "$check_mount"; fi
+  else mount -o loop,ro,norecovery,nouuid "$inspection" "$check_mount"; fi
   manifest "$check_mount" "$results/$fs-$label-restored-files.sha256"
   diff -u "$expected" "$results/$fs-$label-restored-files.sha256"
   umount "$check_mount"

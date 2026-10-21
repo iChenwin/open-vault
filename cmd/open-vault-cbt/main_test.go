@@ -95,6 +95,19 @@ func (f *fakeTracker) SourceSize(context.Context, string) (int64, error) {
 	return f.size, nil
 }
 
+func (f *fakeTracker) Changes(ctx context.Context, _ string, g cbt.Generation) ([]cbt.Extent, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	index, err := os.Open(f.current.PreviousCOW)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer index.Close()
+	ranges, err := cbt.ReadChanges(index, g.Size, g.UUID, f.current.PreviousSequence)
+	return ranges, 4096 + ((g.Size+4095)/4096)*8, err
+}
+
 func TestOversizedBaselineRefusedBeforeAllocatingCOW(t *testing.T) {
 	c, store, tracker, _ := coordinatorFixture(t)
 	tracker.size = blockstore.MaxVolumeSize + 4096

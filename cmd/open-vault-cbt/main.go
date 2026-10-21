@@ -16,16 +16,20 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/ichenwin/open-vault/internal/blksnap"
 	"github.com/ichenwin/open-vault/internal/blockstore"
 	"github.com/ichenwin/open-vault/internal/cbt"
 )
 
 type config struct {
-	Repository string     `json:"repository"`
-	KeyFile    string     `json:"key_file"`
-	StateDir   string     `json:"state_dir"`
-	Volume     cbt.Volume `json:"volume"`
-	DBDCtl     string     `json:"dbdctl"`
+	Repository      string     `json:"repository"`
+	KeyFile         string     `json:"key_file"`
+	StateDir        string     `json:"state_dir"`
+	Volume          cbt.Volume `json:"volume"`
+	DBDCtl          string     `json:"dbdctl"`
+	Provider        string     `json:"provider,omitempty"`
+	Blksnap         string     `json:"blksnap,omitempty"`
+	DifferenceLimit string     `json:"difference_limit,omitempty"`
 }
 type tracker interface {
 	SourceSize(context.Context, string) (int64, error)
@@ -34,7 +38,31 @@ type tracker interface {
 	ToSnapshot(context.Context, string, string) (cbt.Transition, error)
 	ToIncremental(context.Context, string, cbt.Generation) error
 	Verify(context.Context, string, cbt.Generation) error
+	Changes(context.Context, string, cbt.Generation) ([]cbt.Extent, int64, error)
 }
+
+type trackingDriver interface {
+	tracker
+	Diagnose(context.Context) (cbt.Report, error)
+}
+
+func newTracker(c config) (trackingDriver, error) {
+	switch c.Provider {
+	case "", "dattobd":
+		if c.Blksnap != "" || c.DifferenceLimit != "" {
+			return nil, errors.New("blksnap options require explicit provider=blksnap")
+		}
+		return cbt.NewDriver(cbt.DriverConfig{DBDCtl: c.DBDCtl, StateFile: filepath.Join(c.StateDir, "driver.json"), Volumes: []cbt.Volume{c.Volume}})
+	case "blksnap":
+		if c.DBDCtl != "" {
+			return nil, errors.New("dbdctl is incompatible with provider=blksnap")
+		}
+		return blksnap.New(blksnap.Config{Binary: c.Blksnap, StateDir: filepath.Join(c.StateDir, "blksnap"), Volume: c.Volume, DifferenceLimit: c.DifferenceLimit})
+	default:
+		return nil, errors.New("unknown CBT provider")
+	}
+}
+
 type backupResult struct {
 	Generation             blockstore.Generation `json:"generation"`
 	TrackingIndexReadBytes int64                 `json:"tracking_index_read_bytes"`
@@ -257,7 +285,7 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 			result.FinalizedExisting = true
 			return result, nil
 		}
-		if previous.Sequence+1 != g.Sequence || tr.PreviousSequence != previous.Sequence || tr.PreviousCOW == "" {
+		if previous.Sequence+1 != g.Sequence || tr.PreviousSequence != previous.Sequence {
 			return result, errors.New("tracking epoch does not match committed parent; refusing incomplete incremental")
 		}
 	}
@@ -266,19 +294,14 @@ func backup(ctx context.Context, c config, s *blockstore.Store, t tracker, oracl
 	}
 	req := blockstore.Request{Parent: parent, Size: g.Size, SourceID: c.Volume.ID, TrackerUUID: g.UUID, Sequence: g.Sequence}
 	if parent != "" {
-		index, e := os.Open(tr.PreviousCOW)
-		if e != nil {
-			return result, e
-		}
-		ranges, e := cbt.ReadChanges(index, g.Size, g.UUID, tr.PreviousSequence)
-		_ = index.Close()
+		ranges, readBytes, e := t.Changes(ctx, c.Volume.ID, g)
 		if e != nil {
 			return result, e
 		}
 		for _, r := range ranges {
 			req.Changed = append(req.Changed, blockstore.Extent{Offset: r.Offset, Length: r.Length})
 		}
-		result.TrackingIndexReadBytes = 4096 + ((g.Size+4095)/4096)*8
+		result.TrackingIndexReadBytes = readBytes
 	}
 	if e = blockstore.ValidateCapacity(req); e != nil {
 		return result, e
@@ -342,7 +365,7 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 	if op == "diagnose" {
-		d, e := cbt.NewDriver(cbt.DriverConfig{DBDCtl: c.DBDCtl, StateFile: filepath.Join(c.StateDir, "driver.json"), Volumes: []cbt.Volume{c.Volume}})
+		d, e := newTracker(c)
 		if e != nil {
 			return e
 		}
@@ -374,7 +397,7 @@ func run(ctx context.Context, args []string) error {
 			return e
 		}
 		defer releaseRepo()
-		d, e := cbt.NewDriver(cbt.DriverConfig{DBDCtl: c.DBDCtl, StateFile: filepath.Join(c.StateDir, "driver.json"), Volumes: []cbt.Volume{c.Volume}})
+		d, e := newTracker(c)
 		if e != nil {
 			return e
 		}
