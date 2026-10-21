@@ -30,7 +30,7 @@ import (
 //go:embed web/*
 var assets embed.FS
 
-const version = "0.1.0"
+const version = "0.2.0-alpha.1"
 
 type Config struct {
 	Listen       string   `json:"listen"`
