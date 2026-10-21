@@ -4,9 +4,20 @@ set -Eeuo pipefail
 umask 077
 
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+profile=${CBT_LAB_PROFILE:-dattobd}
+build=${CBT_LAB_BUILD:-host}
+case "$profile" in
+  dattobd) lab_scripts="$repo/scripts/cbt-lab" ;;
+  blksnap)
+    lab_scripts="$repo/scripts/blksnap-lab"
+    [[ $build == host ]] || { echo 'blksnap lab requires the native host build profile.' >&2; exit 1; }
+    ;;
+  *) echo 'CBT_LAB_PROFILE must be dattobd or blksnap.' >&2; exit 1 ;;
+esac
 results=${CBT_LAB_RESULTS:-"$repo/artifacts/cbt-kernel-lab"}
 mkdir -p -- "$results"
 results=$(realpath -- "$results")
+printf '%s\n' "$profile" > "$results/driver-profile.txt"
 work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/open-vault-cbt-lab.XXXXXXXX")
 printf 'Isolated lab workspace: %s\nResults: %s\n' "$work" "$results"
 
@@ -133,22 +144,25 @@ done
 [[ $ready == true ]] || { echo 'Guest SSH readiness timed out.' >&2; tail -n 100 "$work/serial.log" >&2; cat "$results/ssh-readiness.log" >&2; exit 1; }
 "${guest[@]}" 'sudo cloud-init status --wait'
 
-(cd "$repo" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$work/open-vault-cbt" ./cmd/open-vault-cbt)
 "${guest[@]}" 'mkdir -p /home/lab/payload /home/lab/results'
-scp "${ssh_opts[@]}" -P "$port" "$work/open-vault-cbt" \
-  "$repo/scripts/cbt-lab/guest-prepare.sh" "$repo/scripts/cbt-lab/guest-test.sh" \
-  "$repo/scripts/cbt-lab/prepare-driver.py" "$repo/scripts/cbt-lab/image-diff.py" lab@127.0.0.1:/home/lab/payload/
+if [[ $profile == dattobd ]]; then
+  (cd "$repo" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$work/open-vault-cbt" ./cmd/open-vault-cbt)
+  scp "${ssh_opts[@]}" -P "$port" "$work/open-vault-cbt" \
+    "$lab_scripts/guest-prepare.sh" "$lab_scripts/guest-test.sh" \
+    "$lab_scripts/prepare-driver.py" "$lab_scripts/image-diff.py" lab@127.0.0.1:/home/lab/payload/
+else
+  scp "${ssh_opts[@]}" -P "$port" "$lab_scripts/guest-prepare.sh" "$lab_scripts/guest-test.sh" lab@127.0.0.1:/home/lab/payload/
+fi
 
 # Native compilation avoids spending most TCG time compiling feature tests.
 # Only the disposable guest installs and loads the resulting kernel module.
-build=${CBT_LAB_BUILD:-host}
 if [[ $build == host ]]; then
   kernel=$("${guest[@]}" uname -r)
   [[ $kernel =~ ^6\.8\.0-[0-9]+-generic$ ]] || exit 1
   if "${guest[@]}" "sudo test -r /boot/System.map-$kernel"; then
     "${guest[@]}" "sudo cat /boot/System.map-$kernel" > "$work/guest-System.map"
   fi
-  bash "$repo/scripts/cbt-lab/build-driver-host.sh" "$kernel" "$work" "$work/driver-bundle" "$results" 2>&1 | tee "$results/host-driver-build.log"
+  bash "$lab_scripts/build-driver-host.sh" "$kernel" "$work" "$work/driver-bundle" "$results" 2>&1 | tee "$results/host-driver-build.log"
   scp "${ssh_opts[@]}" -P "$port" -r "$work/driver-bundle" lab@127.0.0.1:/home/lab/payload/
 elif [[ $build != guest ]]; then
   echo 'CBT_LAB_BUILD must be host or guest.' >&2
