@@ -1,0 +1,32 @@
+name: Release Linux preview
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        default: v0.1.0-alpha.1
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Build Linux amd64 and checksum
+        run: |
+          mkdir release
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o release/open-vault-linux-amd64 .
+          cd release
+          sha256sum open-vault-linux-amd64 > SHA256SUMS
+      - name: Upload to existing preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: gh release upload "$RELEASE_TAG" release/open-vault-linux-amd64 release/SHA256SUMS --clobber
