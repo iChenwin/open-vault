@@ -1,0 +1,15 @@
+.git
+.github
+*.exe
+open-vault
+coverage*
+*.test
+*.log
+*.key
+*.pem
+api-token
+restic-password
+config.json
+state
+repository
+restore

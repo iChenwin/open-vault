@@ -1,0 +1,11 @@
+{
+  "listen": "127.0.0.1:8080",
+  "state_dir": "/var/lib/open-vault",
+  "token_file": "/etc/open-vault/api-token",
+  "repository": "/backup/repository",
+  "password_file": "/etc/open-vault/restic-password",
+  "restore_root": "/restore",
+  "source_roots": ["/data"],
+  "restic_binary": "restic",
+  "operation_timeout_minutes": 120
+}

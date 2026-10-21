@@ -1,0 +1,6 @@
+/open-vault
+/open-vault.exe
+/state/
+/config.json
+*.test
+coverage.out

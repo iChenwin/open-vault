@@ -1,0 +1,26 @@
+[Unit]
+Description=Open Vault Linux file backup controller
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/data /backup/repository /restore
+
+[Service]
+Type=simple
+User=open-vault
+Group=open-vault
+ExecStart=/usr/local/bin/open-vault -config /etc/open-vault/config.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+StateDirectory=open-vault
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/data
+ReadWritePaths=/backup/repository /restore
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
