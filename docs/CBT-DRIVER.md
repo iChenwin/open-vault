@@ -13,6 +13,10 @@
 
 这些是程序的实验性准入条件，不等于全部内核补丁版本已经通过生产认证。`Diagnose` 可以在不支持的环境读取诊断，跟踪与状态转换会拒绝执行。Windows 和 WSL 不属于此版本的真实内核验证环境。
 
+### ARM64 与用户态功能的区别
+
+固定 `v0.11.10` 提交中的 [bio_request_callback.h](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/bio_request_callback.h) 在较新内核的提交路径中仅为 `CONFIG_X86` 定义跳过 fentry 指令的长度，其他架构明确标为 `Unsupported architecture`；[bio_helper.h](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/bio_helper.h) 标明 Linux 5.9 之后使用该路径，[submit_bio.c](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/submit_bio.c) 依赖这一指令处理。[同提交的安装文档](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/INSTALL.md) 也限定发行包为 x86-64，Ubuntu 软件源示例指定 `arch=amd64`。因此不能将这个固定驱动视为支持 Ubuntu 6.8 ARM64，也不能仅移除 Go 架构检查来启用它。Go 用户态程序可针对 ARM64 构建；在具备相应 ARM64 restic 和运行环境时，文件备份及已有镜像的用户态校验、恢复属于独立功能，需要分别验证，不代表 ARM64 内核级 CBT 已获支持。本项目保留 amd64 CBT 门槛。
+
 ## 必须禁用 discard/TRIM
 
 固定上游版本的 [`tracer_should_trace_bio`](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/tracer_helper.c) 过滤 discard 请求。若源盘允许 discard，仅复制普通写入对应的变更块不能证明镜像与新快照一致。
