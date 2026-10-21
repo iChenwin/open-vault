@@ -1,6 +1,6 @@
 # CBT 数据卷备份：实验命令
 
-本模式与 V1 文件备份控制台独立，使用外部安装的 dattobd 驱动取得真实时间点块快照与变更索引。增量数据保存于独立的 AES-256-GCM 块仓库，未通过 restic 写入。V1 的 restic 仓库和恢复流程不变。
+当前项目统一使用 CBT 数据卷备份：外部安装的 dattobd 驱动取得时间点块快照与变更索引，增量保存于独立的 AES-256-GCM 块仓库。旧文件备份流程已移除。
 
 目标环境为 Ubuntu 24.04 amd64、GA `6.8.0-*-generic` 内核及普通 ext4/XFS 数据盘。该范围是软件的能力门槛，实际已验证的内核与场景以 [实验记录](CBT-LAB.md) 为准。不要将 WSL 单元测试当成内核驱动验收。
 
@@ -21,7 +21,7 @@ umask 077
 openssl rand -hex 32 > /etc/open-vault/cbt-key
 ```
 
-镜像仓库密钥与 V1 restic 密码不同，必须独立保管。丢失密钥不能恢复。命令还会检查仓库、密钥、状态和实验 oracle 的底层文件系统，不能通过 bind mount 或路径别名把它们放回源卷。
+镜像仓库密钥必须独立保管。丢失密钥不能恢复。命令还会检查仓库、密钥、状态和实验 oracle 的底层文件系统，不能通过 bind mount 或路径别名把它们放回源卷。
 
 ## 运行
 
@@ -31,6 +31,7 @@ openssl rand -hex 32 > /etc/open-vault/cbt-key
 sudo ./open-vault-cbt -config /etc/open-vault/cbt.json diagnose
 sudo ./open-vault-cbt -config /etc/open-vault/cbt.json backup
 sudo ./open-vault-cbt -config /etc/open-vault/cbt.json status
+sudo ./open-vault-cbt -config /etc/open-vault/cbt.json generations
 sudo ./open-vault-cbt -config /etc/open-vault/cbt.json verify
 sudo ./open-vault-cbt -config /etc/open-vault/cbt.json -target /restore/data-new.img restore
 ```

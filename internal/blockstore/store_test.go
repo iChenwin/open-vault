@@ -24,6 +24,37 @@ func newTestStore(t *testing.T) *Store {
 	}
 	return s
 }
+
+func TestPublishedGenerationHistoryAndOldRestore(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	empty, err := s.Generations(ctx)
+	if err != nil || empty == nil || len(empty) != 0 {
+		t.Fatal("invalid empty history", err)
+	}
+	data := bytes.Repeat([]byte{9}, 8192)
+	first := commit(t, s, bytes.NewReader(data), request(len(data), "", 1))
+	updated := append([]byte(nil), data...)
+	updated[0] = 42
+	second := commit(t, s, bytes.NewReader(updated), request(len(data), first.ID, 2, Extent{0, 4096}))
+	items, err := s.Generations(ctx)
+	if err != nil || len(items) != 2 || items[0].ID != second.ID || items[1].ID != first.ID {
+		t.Fatal("history order/parent mismatch", items, err)
+	}
+	path := filepath.Join(t.TempDir(), "historical.img")
+	if err = s.Restore(ctx, items[1].ID, path); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(actual, data) {
+		t.Fatal("historical selection did not restore original", err)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = s.Generations(ctx); err == nil {
+		t.Fatal("history ignored cancellation")
+	}
+}
 func request(size int, parent string, seq uint64, ext ...Extent) Request {
 	return Request{Size: int64(size), Parent: parent, Changed: ext, SourceID: "disk-test", TrackerUUID: "tracker-test", Sequence: seq}
 }

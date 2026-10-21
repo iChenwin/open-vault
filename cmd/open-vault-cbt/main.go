@@ -321,7 +321,7 @@ func run(ctx context.Context, args []string) error {
 		return e
 	}
 	if flags.NArg() != 1 {
-		return errors.New("usage: open-vault-cbt [flags] diagnose|backup|status|restore|verify")
+		return errors.New("usage: open-vault-cbt [flags] diagnose|backup|status|generations|restore|verify")
 	}
 	c, e := loadConfig(*configPath)
 	if e != nil {
@@ -349,6 +349,12 @@ func run(ctx context.Context, args []string) error {
 		return e
 	}
 	switch op {
+	case "generations":
+		items, e := s.Generations(ctx)
+		if e != nil {
+			return e
+		}
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"generations": items})
 	case "backup":
 		unlock, e := takeLock(c.StateDir)
 		if e != nil {

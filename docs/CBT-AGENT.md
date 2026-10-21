@@ -83,7 +83,7 @@ socket 的预期结果分别是 `root:open-vault 750` 和 `root:open-vault 660`�
 
 ## 将控制台连接到 socket
 
-在普通 Web 控制器的现有配置中增加以下字段，保留其他文件备份配置：
+Web 使用新的 CBT-only 配置，设置 token_file、listen 和以下 socket 字段：
 
 ```json
 {
@@ -91,7 +91,7 @@ socket 的预期结果分别是 `root:open-vault 750` 和 `root:open-vault 660`�
 }
 ```
 
-这是配置片段，不是替代整个 Web 配置的文件。路径必须与 Agent 配置的 `socket_path` 相同。重启 Web 控制器后，输入原有 API 令牌，通过 CBT 控制台查看状态并发起操作：
+完整 Web 配置见 config.example.json。路径必须与 Agent 配置的 `socket_path` 相同。重启 Web 控制器后，输入原有 API 令牌，通过 CBT 控制台查看状态并发起操作：
 
 ```sh
 sudo systemctl restart open-vault
@@ -99,7 +99,7 @@ sudo systemctl restart open-vault
 
 Web 控制器无需 root、sudo 权限、仓库密钥、源块设备访问权限或 Agent 私有配置读取权限。它只通过 socket 调用预设数据卷的 `backup` / `verify` / `restore`。恢复目标受 Agent 的 `restore_root` 约束，只创建新的普通镜像；后续只读挂载、业务切换或人工回写是管理员另行操作的流程。
 
-Web 文件备份服务样例的 `ProtectSystem=strict` 仅适用于原有非 root 文件备份控制器。为控制器增加 Unix socket 客户端访问不需要授予其源块设备读写权限。
+Web 服务样例的 `ProtectSystem=strict` 用于非 root 控制器。为控制器增加 Unix socket 客户端访问不需要授予其源块设备读写权限。
 
 ## 验证与排查
 

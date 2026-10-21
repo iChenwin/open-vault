@@ -1,75 +1,53 @@
 # Open Vault
 
-面向 Linux 的开源文件备份控制台，使用 [restic](https://restic.net/) 执行加密、去重和快照备份。提供中文 Web 界面、定时任务、执行记录及恢复入口。
+面向 Linux 的开源 CBT 数据卷备份项目：通过内核驱动取得时间点快照和变更块索引，将增量保存到独立的 AES-256-GCM 加密镜像仓库，并提供中文 Web 控制台。
 
-本项目受到集中备份管理产品的使用体验启发，是独立实现，与 Synology / 群晖没有关联。首版支持 **Linux 文件和目录备份**，尚不提供 ABB 的完整功能、系统镜像、裸机恢复、虚拟机或应用一致性备份。
+**当前为实验预览，真实内核验收尚未完成。** 适配目标为 Ubuntu 24.04、x86_64 / amd64、GA 6.8 内核、普通 ext4/XFS 数据卷。实际结果见 [验证记录](docs/CBT-VALIDATION.md)。本项目是独立实现，与 Synology / 群晖没有关联。
 
-## 首版范围
+## 当前功能
 
-- 单组织、单控制器、单本地 restic 仓库；仓库可位于预先挂载的 NAS 文件系统。
-- 允许目录内的备份任务，手动运行和按分钟间隔调度。
-- 加密增量快照、任务执行记录、快照列表。
-- 仓库初始化、完整性检查、恢复到指定恢复根目录下的新目录。
-- API Bearer 令牌认证；仓库操作全局串行。
+- 首次全量，后续根据真实变更索引读取源快照；显示实际源读取量。
+- 独立认证加密块仓库、完整镜像 SHA-256 校验。
+- 当前及历史备份版本列表，选择历史版本校验或恢复。
+- 恢复到新的普通 `.img` 文件，拒绝覆盖已有路径或写入真实设备。
+- 非 root Web 控制台通过受限 Unix socket 调用 root Agent；作业串行、异步记录结果。
 
-远程 Linux 主机需要在目标机部署本服务，或先将文件安全挂载到本机。首版没有远端代理纳管、多租户、RBAC、通知、保留策略或自动清理。备份文件权限、运行身份可读取的文件范围及挂载点由部署者管理。
+当前版本已移除 restic 和旧文件备份流程，不再提供按目录创建任务、文件快照或原有定时任务。旧仓库不会自动转换或删除，迁移说明见 [升级说明](docs/MIGRATION.md)。
 
-## 启动
+## 构建与部署
 
-需要 Linux、Go 1.23 或更新版本和可执行的 restic。构建：
+需要 Go 1.23+。目标机器使用 **amd64** 工具链；已有合适的 Go 安装时直接构建：
 
 ```sh
-sudo apt update
-sudo apt install restic -y
-
-
-wget https://golang.google.cn/dl/go1.23.0.linux-arm64.tar.gz
-sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go1.23.0.linux-arm64.tar.gz
-echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc
-source ~/.bashrc
 go version
-
 go build -o open-vault .
+go build -o open-vault-cbt ./cmd/open-vault-cbt
+go build -o open-vault-cbt-agent ./cmd/open-vault-cbt-agent
 ```
 
-完整配置、凭据生成、systemd 与 Docker 部署见 [部署指南](docs/DEPLOYMENT.md)。配置样例为 [config.example.json](config.example.json)。按指南准备目录和两个密钥文件后运行：
+1. 先在可销毁的 QEMU 虚拟机运行 [真实内核实验](docs/CBT-LAB.md)，检查该提交的实验结果。
+2. 按 [驱动说明](docs/CBT-DRIVER.md) 准备固定外部驱动构建。项目不会在业务主机自动安装或加载驱动。
+3. 配置 [CBT CLI](config.cbt.example.json) 和 [特权 Agent](config.cbt-agent.example.json)，参考 [Agent 部署](docs/CBT-AGENT.md)。
+4. 按 [部署指南](docs/DEPLOYMENT.md) 配置非 root Web 控制台，其配置只包含监听地址、API 令牌文件和 Agent socket。
+5. 登录后执行备份、校验并恢复到新镜像，核对实际恢复内容。
 
-```sh
-./open-vault -config /etc/open-vault/config.json
-```
+本机访问 `http://127.0.0.1:8080`。局域网可使用反向代理提供 `http://服务器IP:8080`，示例见部署指南。
 
-浏览器访问 `http://127.0.0.1:8080`，输入 API 令牌。远程访问推荐使用 SSH 隧道：
+## 能力边界
 
-```sh
-ssh -L 8080:127.0.0.1:8080 user@backup-host
-```
-
-## 完成第一次备份和恢复
-
-1. 在部署时允许的源目录内放一个测试文件；记下内容或校验值。
-2. 在控制台初始化仓库，创建任务，选择允许范围内的绝对路径。
-3. 手动运行备份，等待执行记录显示结果，再确认快照出现在列表。
-4. 修改源文件，在快照列表选择先前快照，恢复到恢复根目录下的新目录。
-5. 找到恢复后的文件，比对初始内容或校验值，确认实际恢复成功。
-6. 按需要启用周期任务，并定期重复恢复演练。
-
-任务成功表示该次备份命令完成；它不能替代实际恢复验证。文件可能在读取过程中变化，数据库等应用应先使用应用自身的导出或一致性快照机制，再备份导出结果。控制器停机期间错过的时间点不应视为已有备份。
-
-**请在独立安全位置保存仓库密码。** 丢失密码将无法解密备份。API 令牌和仓库密码应分别生成，禁止提交到 Git。备份仓库也需要独立故障域和访问控制；同一机器上的副本不能覆盖整机损坏或勒索软件等风险。
+当前支持范围仅为实验性数据卷镜像，不提供根卷/裸机恢复、ARM64 内核 CBT、LVM/RAID/LUKS、应用一致性、多机纳管、自动保留或链合并。整卷上限 256 GiB，最多 128 代；过度碎片化的增量也可能超过清单限制。重启或跟踪连续性丢失需要人工建立新基线。请独立保管加密密钥，并执行恢复演练。
 
 ## 开发与参与
-
-Ubuntu 24.04 / GA 6.8 普通 ext4/XFS 数据卷的真实 CBT 能力正在独立实验分支开发，使用内核驱动和加密块仓库，可通过独立本地 Agent 接入控制台。参见 [V2 设计](docs/CBT-V2-DESIGN.md)、[实验命令](docs/CBT-USAGE.md)、[控制台接入](docs/CBT-AGENT.md)及[内核验证流程](docs/CBT-LAB.md)。支持状态以对应提交的真实实验结果为准，不代表已经具备 ABB 的完整能力。CBT 实验优先使用 Linux 主机部署，原有 Docker 镜像不会自动安装驱动或特权 Agent。
 
 ```sh
 go test ./...
 go vet ./...
 ```
 
-参见 [架构](docs/ARCHITECTURE.md)、[验证记录](docs/VALIDATION.md)、[贡献指南](CONTRIBUTING.md)和[安全策略](SECURITY.md)。
+CI 验证用户态加密仓库、镜像恢复、驱动协议模拟、Unix socket 和控制台。真实驱动验收另由隔离 QEMU 实验执行；模拟测试不证明内核支持。
 
+参见 [架构](docs/ARCHITECTURE.md)、[实验命令](docs/CBT-USAGE.md)、[贡献指南](CONTRIBUTING.md)和[安全策略](SECURITY.md)。
 
 ## 许可
 
-项目代码使用 [MIT 许可证](LICENSE)。restic 是独立软件，使用 [BSD 2-Clause 许可证](https://github.com/restic/restic/blob/master/LICENSE)。Docker 镜像中的操作系统包保留各自许可证。项目不包含 Synology 的代码、商标素材或专有协议实现。
+本项目代码使用 [MIT 许可证](LICENSE)。独立安装的 dattobd 驱动及其外部修改保留上游 GPL 许可；未将内核实现复制或链接进 Go 程序。操作系统包保留各自许可。项目不包含 Synology 专有代码、协议或商标素材。

@@ -25,12 +25,13 @@ var cbtTargetName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,80}$`)
 func (s *Server) cbtAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	allowed := map[string]string{
-		"/api/cbt/status":  http.MethodGet,
-		"/api/cbt/runs":    http.MethodGet,
-		"/api/cbt/head":    http.MethodGet,
-		"/api/cbt/backup":  http.MethodPost,
-		"/api/cbt/verify":  http.MethodPost,
-		"/api/cbt/restore": http.MethodPost,
+		"/api/cbt/status":      http.MethodGet,
+		"/api/cbt/runs":        http.MethodGet,
+		"/api/cbt/head":        http.MethodGet,
+		"/api/cbt/generations": http.MethodGet,
+		"/api/cbt/backup":      http.MethodPost,
+		"/api/cbt/verify":      http.MethodPost,
+		"/api/cbt/restore":     http.MethodPost,
 	}
 	method, ok := allowed[r.URL.Path]
 	if !ok {

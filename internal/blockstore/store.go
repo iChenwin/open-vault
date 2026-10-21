@@ -191,6 +191,33 @@ func (s *Store) Info(id string) (Generation, error) {
 	return l.m.Generation, nil
 }
 
+// Generations lists authenticated metadata in the published HEAD chain, newest
+// first. Unpublished staging directories and orphaned commits are excluded.
+func (s *Store) Generations(ctx context.Context) ([]Generation, error) {
+	result := []Generation{}
+	id, err := s.Head()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for id != "" {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if seen[id] || len(result) >= maxChain {
+			return nil, errors.New("invalid generation history chain")
+		}
+		seen[id] = true
+		g, err := s.Info(id)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, g)
+		id = g.Parent
+	}
+	return result, nil
+}
+
 // ConfirmHead verifies the complete published image and repeats the HEAD file
 // and repository directory syncs before a coordinator releases its snapshot.
 // It resolves a prior ErrCommitUncertain without reading the source device or

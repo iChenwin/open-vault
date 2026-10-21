@@ -461,7 +461,9 @@ func (s *Service) Handler() http.Handler {
 			defer s.mu.Unlock()
 			jsonOut(w, 200, s.runs)
 		case r.Method == "GET" && r.URL.Path == "/head":
-			s.head(w, r)
+			s.query(w, r, "status")
+		case r.Method == "GET" && r.URL.Path == "/generations":
+			s.query(w, r, "generations")
 		case r.Method == "POST" && r.URL.Path == "/backup":
 			var body struct{}
 			if !decodeBody(w, r, &body, true) {
@@ -499,7 +501,7 @@ func (s *Service) Handler() http.Handler {
 	})
 }
 
-func (s *Service) head(w http.ResponseWriter, r *http.Request) {
+func (s *Service) query(w http.ResponseWriter, r *http.Request, operation string) {
 	s.mu.Lock()
 	if s.busy {
 		s.mu.Unlock()
@@ -519,16 +521,35 @@ func (s *Service) head(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	stop := context.AfterFunc(s.ctx, cancel)
 	defer stop()
-	stdout, stderr, err := s.execute(ctx, "-config", s.cfg.CLIConfig, "status")
+	stdout, stderr, err := s.execute(ctx, "-config", s.cfg.CLIConfig, operation)
 	if err != nil {
 		var diagnostic struct {
 			Error string `json:"error"`
 		}
-		if json.Unmarshal(stderr, &diagnostic) == nil && diagnostic.Error == "repository has no generations" {
+		if operation == "status" && json.Unmarshal(stderr, &diagnostic) == nil && diagnostic.Error == "repository has no generations" {
 			jsonOut(w, 200, map[string]any{"generation": nil})
 			return
 		}
 		fail(w, 502, controlledError(ctx, err))
+		return
+	}
+	if operation == "generations" {
+		var out struct {
+			Generations []blockstore.Generation `json:"generations"`
+		}
+		if json.Unmarshal(stdout, &out) != nil || out.Generations == nil || len(out.Generations) > 128 {
+			fail(w, 502, "CBT CLI returned invalid generation history")
+			return
+		}
+		seen := map[string]bool{}
+		for i, g := range out.Generations {
+			if !generationName.MatchString(g.ID) || seen[g.ID] || g.Size <= 0 || g.SourceReadBytes < 0 || g.SourceReadBytes > g.Size || (i > 0 && out.Generations[i-1].Parent != g.ID) || (i == len(out.Generations)-1 && g.Parent != "") {
+				fail(w, 502, "CBT CLI returned invalid generation history")
+				return
+			}
+			seen[g.ID] = true
+		}
+		jsonOut(w, 200, out)
 		return
 	}
 	out, err := decodeResult(stdout)

@@ -103,6 +103,30 @@ func fixtureService(t *testing.T) *Service {
 	return s
 }
 
+func TestGenerationHistoryUsesFixedCLIAndRejectsBrokenChain(t *testing.T) {
+	s := fixtureService(t)
+	for _, test := range []struct {
+		body   string
+		status int
+	}{
+		{`{"generations":[]}`, 200},
+		{`{"generations":[{"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":4096,"source_read_bytes":4096}]}`, 200},
+		{`{"generations":null}`, 502},
+		{`{"generations":[{"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parent":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","size":4096}]}`, 502},
+	} {
+		s.execute = func(ctx context.Context, args ...string) ([]byte, []byte, error) {
+			if !reflect.DeepEqual(args, []string{"-config", s.cfg.CLIConfig, "generations"}) {
+				t.Fatalf("unsafe history argv: %v", args)
+			}
+			return []byte(test.body), nil, nil
+		}
+		w := request(s, "GET", "/generations", "")
+		if w.Code != test.status {
+			t.Fatalf("history response %s: %d", test.body, w.Code)
+		}
+	}
+}
+
 func request(s *Service, method, path, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))

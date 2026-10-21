@@ -10,13 +10,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
-      - name: Install backup engine
-        run: sudo apt-get update && sudo apt-get install -y restic
       - name: Static checks
         run: go vet ./...
-      - name: Tests and real encrypted backup and restore
-        env:
-          RESTIC_TEST_BINARY: /usr/bin/restic
+      - name: Tests, encrypted image recovery and Unix socket integration
         run: go test -race -count=1 -v ./...
       - name: Build
         run: |

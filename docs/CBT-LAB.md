@@ -1,10 +1,10 @@
 # 真实内核 CBT 实验
 
-此实验在一次性 QEMU Ubuntu 24.04 guest 中编译并加载真实 dattobd 模块，验证普通 ext4、XFS 数据卷的全量及变更块增量备份。单元测试或模拟驱动不作为本实验验收依据。脚本存在不代表支持已验证，必须检查对应提交的真实运行结果。
+此实验在一次性 QEMU Ubuntu 24.04 guest 中加载真实 dattobd 模块，验证普通 ext4、XFS 数据卷的全量及变更块增量备份。单元测试或模拟驱动不作为本实验验收依据。脚本存在不代表支持已验证，必须检查对应提交的真实运行结果。
 
 ## 隔离范围
 
-宿主机只下载镜像、创建普通 qcow2 / raw 文件并启动 QEMU，不格式化或挂载任何宿主机块设备。没有将宿主机 `/dev`、业务盘或共享文件系统传入 guest。guest 仅格式化同时满足以下条件的两块盘：virtio serial 分别为 `OPENVAULT_CBT_EXT4` / `OPENVAULT_CBT_XFS`、大小恰为 512 MiB、没有分区、挂载点或已有文件系统。任何检查失败即停止。
+宿主机下载镜像、创建普通 qcow2 / raw 文件并启动 QEMU。默认还在 Ubuntu 24.04 宿主安装 guest 精确版本的头文件和编译依赖，在临时源码目录原生编译驱动，但绝不在宿主安装或加载内核模块；只在 guest 中安装和加载。脚本不格式化或挂载任何宿主机块设备。没有将宿主机 `/dev`、业务盘或共享文件系统传入 guest。guest 仅格式化同时满足以下条件的两块盘：virtio serial 分别为 `OPENVAULT_CBT_EXT4` / `OPENVAULT_CBT_XFS`、大小恰为 512 MiB、没有分区、挂载点或已有文件系统。任何检查失败即停止。
 
 Linux 宿主机需要 x86_64、Go 1.23+、QEMU、cloud-image-utils、OpenSSH 客户端、curl 和 Python 3。GitHub 工作流安装所需宿主工具；特权的文件系统操作和驱动加载仅发生在 guest。`auto` 默认使用 TCG，避免仅凭 `/dev/kvm` 存在就假设嵌套虚拟化可用；在已知可用的主机上可显式选择 KVM。二者均启动真实 Linux 内核，TCG 速度较慢。
 
@@ -17,6 +17,8 @@ CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh
 ```
 
 脚本打印一次性工作目录及结果目录。默认结果保存在 `artifacts/cbt-kernel-lab`。工作目录中的虚拟磁盘保留以便调查，本地运行完后由部署者确认路径再自行删除；GitHub runner 会随任务结束回收。请预留约 10 GiB 可用空间，允许下载官方云镜像以及 guest 安装依赖。没有将私钥或备份密钥上传到工作流 artifact。
+
+默认 `CBT_LAB_BUILD=host`，原生编译避免 TCG 花费大量时间编译内核特性测试；会记录构建位置、源码差异、特性配置、传输校验值及 guest 模块版本。也可设置 `CBT_LAB_BUILD=guest` 保留 guest 内编译。原生编译模式需要 Ubuntu 24.04 amd64 宿主及安装头文件所需的 sudo 权限，GitHub runner 为一次性宿主。
 
 `CBT_LAB_ACCEL` 可选 `auto`、`kvm` 或 `tcg`；`CBT_LAB_RESULTS` 指定结果目录。默认云镜像目录为 `https://cloud-images.ubuntu.com/noble/current`。`CBT_LAB_IMAGE_BASE` 可指定 Canonical 的历史镜像目录，以复现实验；镜像及 `SHA256SUMS` 必须来自同一可信来源。使用同一镜像目录 `unpacked` 中校验过的 kernel/initrd 直接启动，强制输出串口日志，绕过固件及 GRUB；这不验证启动恢复能力。当前镜像随时间更新，实际下载 URL、磁盘及 kernel/initrd 校验值写入结果。SHA256 校验用于检测下载内容与发布清单的一致性，没有替代镜像来源认证。
 

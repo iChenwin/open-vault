@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,6 +28,59 @@ type fakeTracker struct {
 }
 
 const series = "00112233445566778899aabbccddeeff"
+
+func TestRepositoryCommandsWithoutOriginalVolumeOrDriver(t *testing.T) {
+	root := t.TempDir()
+	c := config{Repository: filepath.Join(root, "repo"), KeyFile: filepath.Join(root, "key"), StateDir: filepath.Join(root, "state")}
+	key := bytes.Repeat([]byte{7}, 32)
+	if err := os.WriteFile(c.KeyFile, []byte(hex.EncodeToString(key)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := blockstore.Open(c.Repository, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := bytes.Repeat([]byte("old-volume-content"), 512)
+	g, err := store.Commit(context.Background(), bytes.NewReader(data), blockstore.Request{Size: int64(len(data)), SourceID: "data", TrackerUUID: series, Sequence: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "config.json")
+	b, _ := json.Marshal(c)
+	if err = os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	capture := func(args ...string) []byte {
+		t.Helper()
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		previous := os.Stdout
+		os.Stdout = writer
+		defer func() { os.Stdout = previous; reader.Close(); writer.Close() }()
+		err = run(context.Background(), append([]string{"-config", path}, args...))
+		_ = writer.Close()
+		out, readErr := io.ReadAll(reader)
+		if err != nil || readErr != nil {
+			t.Fatal(err, readErr)
+		}
+		return out
+	}
+	var history struct {
+		Generations []blockstore.Generation `json:"generations"`
+	}
+	if err = json.Unmarshal(capture("generations"), &history); err != nil || len(history.Generations) != 1 || history.Generations[0].ID != g.ID {
+		t.Fatal("CLI history mismatch", err)
+	}
+	capture("-generation", g.ID, "verify")
+	target := filepath.Join(root, "new.img")
+	capture("-generation", g.ID, "-target", target, "restore")
+	actual, err := os.ReadFile(target)
+	if err != nil || !bytes.Equal(actual, data) {
+		t.Fatal("driver-independent restore failed", err)
+	}
+}
 
 func (f *fakeTracker) Current(context.Context, string) (cbt.Transition, error) {
 	if f.currentError != nil {

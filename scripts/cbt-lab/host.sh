@@ -139,6 +139,22 @@ scp "${ssh_opts[@]}" -P "$port" "$work/open-vault-cbt" \
   "$repo/scripts/cbt-lab/guest-prepare.sh" "$repo/scripts/cbt-lab/guest-test.sh" \
   "$repo/scripts/cbt-lab/prepare-driver.py" lab@127.0.0.1:/home/lab/payload/
 
+# Native compilation avoids spending most TCG time compiling feature tests.
+# Only the disposable guest installs and loads the resulting kernel module.
+build=${CBT_LAB_BUILD:-host}
+if [[ $build == host ]]; then
+  kernel=$("${guest[@]}" uname -r)
+  [[ $kernel =~ ^6\.8\.0-[0-9]+-generic$ ]] || exit 1
+  if "${guest[@]}" "sudo test -r /boot/System.map-$kernel"; then
+    "${guest[@]}" "sudo cat /boot/System.map-$kernel" > "$work/guest-System.map"
+  fi
+  bash "$repo/scripts/cbt-lab/build-driver-host.sh" "$kernel" "$work" "$work/driver-bundle" "$results" 2>&1 | tee "$results/host-driver-build.log"
+  scp "${ssh_opts[@]}" -P "$port" -r "$work/driver-bundle" lab@127.0.0.1:/home/lab/payload/
+elif [[ $build != guest ]]; then
+  echo 'CBT_LAB_BUILD must be host or guest.' >&2
+  exit 1
+fi
+
 # Preserve diagnostics even when compilation, module loading, or a real backup fails.
 set +e
 "${guest[@]}" 'sudo bash /home/lab/payload/guest-prepare.sh && sudo bash /home/lab/payload/guest-test.sh' 2>&1 | tee "$results/guest-console.log"

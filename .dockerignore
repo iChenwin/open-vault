@@ -13,3 +13,9 @@ config.json
 state
 repository
 restore
+open-vault-cbt
+open-vault-cbt-agent
+config.cbt.json
+config.cbt-agent.json
+artifacts
+*.img

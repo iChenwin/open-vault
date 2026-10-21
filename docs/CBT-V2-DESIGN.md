@@ -1,12 +1,12 @@
 # V2：Linux 卷级 CBT 备份设计草案
 
-状态：实验分支已实现用户态驱动适配、加密增量镜像及受限控制台代理；真实内核能力需通过隔离实验验收。V1 文件备份行为保留。操作与验证状态以 [实验命令](CBT-USAGE.md)、[Agent 部署](CBT-AGENT.md)和[内核实验](CBT-LAB.md)为准。
+状态：实验分支已实现用户态驱动适配、加密增量镜像及受限控制台代理；真实内核能力需通过隔离实验验收。项目现已统一 CBT-only，旧文件备份流程已移除。操作与验证状态以 [实验命令](CBT-USAGE.md)、[Agent 部署](CBT-AGENT.md)和[内核实验](CBT-LAB.md)为准。
 
 ## 目标与现状
 
 CBT 全称 Changed Block Tracking，记录备份周期之间被写入的逻辑块。它解决源端“该读取哪些块”的问题。内容分块去重解决“读取后有哪些内容已经保存”的问题，两者可以组合。
 
-当前 Open Vault 调用 restic 进行文件备份。restic 可以复用未变化文件的数据并对读取内容去重，但本项目没有安装内核块跟踪器，不具备卷级 CBT。CBT 也不自动等于应用一致性、文件恢复或可启动的裸机恢复。
+当前实现使用外部内核跟踪器和独立加密镜像仓库。CBT 不自动等于应用一致性、文件级恢复或可启动的裸机恢复。
 
 Synology 官方文档确认 Linux ABB 依赖随代理安装的快照驱动实施 CBT；本项目只能独立实现相同类别的能力，不声称复用或兼容其私有驱动和仓库格式。
 
@@ -49,11 +49,9 @@ flowchart LR
 6. discard/TRIM、清零、尾块及设备扩容必须有明确语义及实测。不能仅复制普通 WRITE 数据而默默保留旧版本中应清零的区间。
 7. 崩溃一致性与应用一致性分别标注。文件系统冻结与快照可以帮助取得稳定边界；数据库仍需要应用协调、日志或专用备份方法。
 
-## restic 是否保留
+## 存储选择
 
-可以保留 V1 的文件备份引擎。V2 也可评估将“增量块包 + 镜像清单”作为普通文件交给 restic 存储，复用其加密与仓库机制；这需要新增块清单、父版本管理和镜像重建协议，restic 的普通文件恢复不能直接完成卷恢复。
-
-把整个块设备通过 stdin 重新交给 restic，或每次重新生成完整镜像再备份，不能证明源端只读了变更块。验收需要实际读取字节数等指标。
+使用独立的认证加密块仓库，不再保留文件备份执行引擎。源读取量与仓库端完整镜像校验工作分别记录；每次读取全盘不能算源端 CBT 增量。
 
 ## 验收门槛
 
@@ -65,7 +63,7 @@ flowchart LR
 
 ## 开发前需要的环境信息
 
-发行版与完整内核版本、目标架构、Secure Boot 状态、文件系统、LVM/Device Mapper 布局，以及可销毁虚拟机和测试盘的可用性。当前会话只验证过 WSL 内的用户态文件备份，不具备已验证的 CBT 驱动运行环境。
+发行版与完整内核版本、目标架构、Secure Boot 状态、文件系统、LVM/Device Mapper 布局，以及可销毁虚拟机和测试盘的可用性。实际已验证和失败状态见 CBT-VALIDATION.md。
 
 ## 依据
 
@@ -74,4 +72,3 @@ flowchart LR
 - [Linux 内核 dm-era 文档](https://docs.kernel.org/admin-guide/device-mapper/era.html)
 - [Linux 内核 Device Mapper snapshot 文档](https://docs.kernel.org/admin-guide/device-mapper/snapshot.html)
 - [Datto dattobd 源项目](https://github.com/datto/dattobd)
-- [restic 备份文档](https://restic.readthedocs.io/en/stable/040_backup.html)

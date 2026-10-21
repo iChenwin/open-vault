@@ -15,6 +15,16 @@ printf 'Ubuntu=%s kernel=%s arch=%s\n' "$VERSION_ID" "$(uname -r)" "$(uname -m)"
 export DEBIAN_FRONTEND=noninteractive
 # Do not install a kernel metapackage or upgrade the image to HWE.
 apt-get update
+if [[ -d /home/lab/payload/driver-bundle ]]; then
+  apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends xfsprogs e2fsprogs openssl python3 jq
+  cd /home/lab/payload/driver-bundle
+  sha256sum --check SHA256SUMS
+  [[ $(modinfo -F version ./dattobd.ko) == 0.12.0-ov1 ]] || exit 1
+  [[ $(modinfo -F vermagic ./dattobd.ko) == "$(uname -r) "* ]] || exit 1
+  install -D -m 0644 dattobd.ko "/lib/modules/$(uname -r)/updates/dattobd.ko"
+  install -D -m 0755 libdattobd.so.1 /usr/local/lib64/libdattobd.so.1
+  install -D -m 0755 dbdctl /usr/local/bin/dbdctl
+else
 apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends build-essential git ca-certificates \
   "linux-headers-$(uname -r)" libelf-dev xfsprogs e2fsprogs openssl python3 jq
 
@@ -31,6 +41,7 @@ make -j2
 grep -q '^#define HAVE_ENUM_REQ_OP_WRITE_ZEROES' src/kernel-config.h
 cp src/kernel-config.h "$results/driver-kernel-config.h"
 make install
+fi
 printf '/usr/local/lib64\n' > /etc/ld.so.conf.d/open-vault-dattobd-lab.conf
 ldconfig
 depmod -a

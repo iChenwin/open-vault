@@ -44,7 +44,7 @@ func TestCBTProxyUnconfiguredAndAllowlist(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"configured":false`) || !strings.Contains(w.Body.String(), `"busy":false`) {
 		t.Fatalf("bad unconfigured status: %d %s", w.Code, w.Body.String())
 	}
-	for _, path := range []string{"runs", "head", "backup", "verify", "restore"} {
+	for _, path := range []string{"runs", "head", "generations", "backup", "verify", "restore"} {
 		method := "GET"
 		if path == "backup" || path == "verify" || path == "restore" {
 			method = "POST"
@@ -67,14 +67,14 @@ func TestCBTProxyUnconfiguredAndAllowlist(t *testing.T) {
 }
 
 func TestCBTProxyUsesExistingAPIToken(t *testing.T) {
-	s := &Server{token: "existing-file-backup-token"}
-	for _, token := range []string{"", "Bearer wrong", "Bearer existing-file-backup-token"} {
+	s := &Server{token: "existing-console-token"}
+	for _, token := range []string{"", "Bearer wrong", "Bearer existing-console-token"} {
 		r := httptest.NewRequest("GET", "/api/cbt/status", nil)
 		r.Header.Set("Authorization", token)
 		w := httptest.NewRecorder()
 		s.api(w, r)
 		want := http.StatusUnauthorized
-		if token == "Bearer existing-file-backup-token" {
+		if token == "Bearer existing-console-token" {
 			want = http.StatusOK
 		}
 		if w.Code != want {

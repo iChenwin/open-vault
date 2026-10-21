@@ -1,3 +1,5 @@
+> 历史首版讨论记录；其中的文件备份方案已被当前 CBT-only 架构替代。当前实现参见 [README](../README.md)、[架构](ARCHITECTURE.md)及[升级说明](MIGRATION.md)。
+
 # 产品与设计评审
 
 以下为六个 AI 专家视角的结构化评审，不代表已邀请真人专家。目标是参考 Synology Active Backup for Business 的集中管理体验，独立开发开源 Linux 文件级备份管理工具，不复制商标、素材或专有代码。
