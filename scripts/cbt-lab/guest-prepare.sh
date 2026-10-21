@@ -18,8 +18,8 @@ apt-get update
 apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends build-essential git ca-certificates \
   "linux-headers-$(uname -r)" libelf-dev xfsprogs e2fsprogs openssl python3 jq
 
-commit=229ca998ce570ab1b74172d55dda62783d5b2d8d
-git clone --branch v0.11.10 --depth 1 https://github.com/datto/dattobd.git /home/lab/dattobd
+commit=68bf21b8a9e74d1c8aac967238f81e189963c0a1
+git clone --branch v0.12.0 --depth 1 https://github.com/datto/dattobd.git /home/lab/dattobd
 cd /home/lab/dattobd
 [[ $(git rev-parse HEAD) == "$commit" ]] || { echo 'dattobd tag did not resolve to the audited commit.' >&2; exit 1; }
 printf '%s\n' "$commit" > "$results/dattobd-commit.txt"

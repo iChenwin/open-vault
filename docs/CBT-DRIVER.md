@@ -5,7 +5,7 @@
 ## 目前限定的环境
 
 - Ubuntu 24.04，amd64，GA `6.8.0-数字-generic` 内核。
-- dattobd `v0.11.10`，固定提交 [`229ca998ce570ab1b74172d55dda62783d5b2d8d`](https://github.com/datto/dattobd/tree/229ca998ce570ab1b74172d55dda62783d5b2d8d)。后续上游版本需要重新验证。
+- dattobd `v0.12.0`，固定提交 [`68bf21b8a9e74d1c8aac967238f81e189963c0a1`](https://github.com/datto/dattobd/tree/68bf21b8a9e74d1c8aac967238f81e189963c0a1)。后续上游版本需要重新验证。
 - 普通物理盘或虚拟机直接呈现的数据盘及其分区，完整 ext4/XFS 挂载。禁止系统根、boot、bind 子目录、LVM/device-mapper、md、loop、zram、其他堆叠或虚拟块设备。
 - COW 目录必须已存在、权限私有（0700），位于被跟踪的数据挂载内，且不能跨入嵌套挂载。持久化 journal、仓库和密钥放在源挂载之外。
 - 管理员配置精确的数据卷 allowlist。块设备、挂载点和 COW 目录在启动时解析符号链接；每次操作重新校验。
@@ -13,13 +13,15 @@
 
 这些是程序的实验性准入条件，不等于全部内核补丁版本已经通过生产认证。`Diagnose` 可以在不支持的环境读取诊断，跟踪与状态转换会拒绝执行。Windows 和 WSL 不属于此版本的真实内核验证环境。
 
+版本选择依据：上游 [问题 #402](https://github.com/datto/dattobd/issues/402) 报告 `v0.11.10` 在 Ubuntu 24.04 的 XFS 上崩溃，并确认 `v0.12.0` 修复。本项目因此固定修复版，拒绝继续使用旧版。两版公开 COW 头部、索引布局及所用命令协议一致，但这不替代真实内核备份恢复实验；验证状态见 [CBT-VALIDATION.md](CBT-VALIDATION.md)。
+
 ### ARM64 与用户态功能的区别
 
-固定 `v0.11.10` 提交中的 [bio_request_callback.h](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/bio_request_callback.h) 在较新内核的提交路径中仅为 `CONFIG_X86` 定义跳过 fentry 指令的长度，其他架构明确标为 `Unsupported architecture`；[bio_helper.h](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/bio_helper.h) 标明 Linux 5.9 之后使用该路径，[submit_bio.c](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/submit_bio.c) 依赖这一指令处理。[同提交的安装文档](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/INSTALL.md) 也限定发行包为 x86-64，Ubuntu 软件源示例指定 `arch=amd64`。因此不能将这个固定驱动视为支持 Ubuntu 6.8 ARM64，也不能仅移除 Go 架构检查来启用它。Go 用户态程序可针对 ARM64 构建；在具备相应 ARM64 restic 和运行环境时，文件备份及已有镜像的用户态校验、恢复属于独立功能，需要分别验证，不代表 ARM64 内核级 CBT 已获支持。本项目保留 amd64 CBT 门槛。
+固定 `v0.12.0` 提交中的 [bio_request_callback.h](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/src/bio_request_callback.h) 在较新内核的提交路径中仅为 `CONFIG_X86` 定义跳过 fentry 指令的长度，其他架构明确标为 `Unsupported architecture`；[bio_helper.h](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/src/bio_helper.h) 标明 Linux 5.9 之后使用该路径，[submit_bio.c](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/src/submit_bio.c) 依赖这一指令处理。[同提交的安装文档](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/INSTALL.md) 也限定发行包为 x86-64，Ubuntu 软件源示例指定 `arch=amd64`。因此不能将这个固定驱动视为支持 Ubuntu 6.8 ARM64，也不能仅移除 Go 架构检查来启用它。Go 用户态程序可针对 ARM64 构建；在具备相应 ARM64 restic 和运行环境时，文件备份及已有镜像的用户态校验、恢复属于独立功能，需要分别验证，不代表 ARM64 内核级 CBT 已获支持。本项目保留 amd64 CBT 门槛。
 
 ## 必须禁用 discard/TRIM
 
-固定上游版本的 [`tracer_should_trace_bio`](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/tracer_helper.c) 过滤 discard 请求。若源盘允许 discard，仅复制普通写入对应的变更块不能证明镜像与新快照一致。
+固定上游版本的 [`tracer_should_trace_bio`](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/src/tracer_helper.c) 过滤 discard 请求。若源盘允许 discard，仅复制普通写入对应的变更块不能证明镜像与新快照一致。
 
 因此适配器沿 `/sys/dev/block/major:minor` 找到源设备；对分区检查其父盘队列，要求 `queue/discard_max_bytes` 为 `0`，同时拒绝带 slaves 的设备。该检查在每次跟踪操作、Current 和 Verify 时执行。程序不会自行更改 sysfs，也不会在本机安装驱动。管理员必须在独立测试机确认并配置该条件，避免挂载选项、fstrim 或其他管理程序重新启用 discard。重启后设置可能丢失。
 
@@ -45,7 +47,7 @@ journal 还记录 Linux boot ID。重启后拒绝沿用原链，即使相同 UUI
 
 ## COW 格式解析边界
 
-格式依据上游公开的 [STRUCTURE.md](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/doc/STRUCTURE.md)、[头部格式声明](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/src/dattobd.h)及 [update-img 协议使用方式](https://github.com/datto/dattobd/blob/229ca998ce570ab1b74172d55dda62783d5b2d8d/utils/update-img.c)。解析规则独立实现，未移植其函数。
+格式依据上游公开的 [STRUCTURE.md](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/doc/STRUCTURE.md)、[头部格式声明](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/src/dattobd.h)及 [update-img 协议使用方式](https://github.com/datto/dattobd/blob/68bf21b8a9e74d1c8aac967238f81e189963c0a1/utils/update-img.c)。解析规则独立实现，未移植其函数。
 
 amd64 原生格式为 little-endian：4096 字节头部，magic 4776；sequence 位于字节 24–31，16 字节 UUID 位于 32–47，格式版本位于 48–55，变更计数位于 56–63。索引从字节 4096 开始，每个源 4096 字节块对应一个 64 位项，非零即发生变更。
 

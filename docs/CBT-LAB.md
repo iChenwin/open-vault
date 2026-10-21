@@ -23,7 +23,7 @@ CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh
 ## 固定条件
 
 - guest 必须报告 Ubuntu `24.04`、`6.8.*-generic` GA 内核；其他发行版和 HWE 内核直接失败，不扩展为已支持。
-- dattobd 固定为 `v0.11.10` 的 commit `229ca998ce570ab1b74172d55dda62783d5b2d8d`；构建前验证 tag 解析结果。
+- dattobd 固定为 `v0.12.0` 的 commit `68bf21b8a9e74d1c8aac967238f81e189963c0a1`；构建前验证 tag 解析结果。
 - 两个文件系统使用独立备份仓库和 agent 状态，minor 分别为 0、1，期间不卸载驱动。
 - virtio 磁盘配置不向宿主传递 discard，guest 对新建实验盘设置并确认 `discard_max_bytes=0`，使用 `nodiscard` 挂载。
 - 模块自身在创建快照与状态切换时协调冻结 / 解冻，测试不在外部先执行 `fsfreeze`。
@@ -51,4 +51,4 @@ CBT_LAB_ACCEL=auto bash scripts/cbt-lab/host.sh
 
 这只能验证指定 Ubuntu GA 内核、虚拟盘和测试工作负载。不能据此声明已支持宿主业务盘、其他内核、LVM、RAID、LUKS、根卷启动恢复、并发数据库一致性或所有断电场景。应继续扩展故障注入、COW 空间耗尽、链中断和长时间负载验证。
 
-参考：[dattobd v0.11.10](https://github.com/datto/dattobd/releases/tag/v0.11.10)、[驱动操作手册](https://github.com/datto/dattobd/blob/v0.11.10/doc/dbdctl.8.md)、[Canonical 本地 cloud-init + QEMU](https://ubuntu.com/docs/public-images/public-images-how-to/use-local-cloud-init-ds/)。
+参考：[dattobd v0.12.0](https://github.com/datto/dattobd/releases/tag/v0.12.0)、[驱动操作手册](https://github.com/datto/dattobd/blob/v0.12.0/doc/dbdctl.8.md)、[Canonical 本地 cloud-init + QEMU](https://ubuntu.com/docs/public-images/public-images-how-to/use-local-cloud-init-ds/)。
